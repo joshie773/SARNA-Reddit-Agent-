@@ -6,8 +6,8 @@ fallback templates, and system constants. No live API calls for rules.
 """
 
 # =============================================================================
-# RSS FEED TARGET
-# Single aggregated endpoint for all 10 subreddits (public, no auth)
+# RSS FEED TARGETS
+# Target subreddits for individual RSS fetching
 # =============================================================================
 TARGET_SUBREDDITS = [
     "shopify", "ecommerce", "smallbusiness", "EntrepreneurIndia",
@@ -15,11 +15,7 @@ TARGET_SUBREDDITS = [
     "ShopifyAppDev", "shopifyDev",
 ]
 
-RSS_FEED_URL = (
-    "https://www.reddit.com/r/"
-    + "+".join(TARGET_SUBREDDITS)
-    + "/new/.rss"
-)
+MAX_POSTS_PER_SUBREDDIT = 3
 
 # =============================================================================
 # POST FILTERING

@@ -19,7 +19,8 @@ import feedparser
 import requests
 
 from config import (
-    RSS_FEED_URL,
+    TARGET_SUBREDDITS,
+    MAX_POSTS_PER_SUBREDDIT,
     INTENT_KEYWORDS,
     VALUE_KEYWORDS,
     MAX_POSTS_PER_RUN,
@@ -86,7 +87,7 @@ def save_processed_posts(post_ids: set):
 # =============================================================================
 def fetch_rss_feed(user_agent: str | None = None) -> list[dict]:
     """
-    Fetch and parse the aggregated 10-subreddit RSS feed.
+    Fetch and parse RSS feeds for each subreddit individually.
 
     Returns a list of raw entry dicts with extracted fields:
     - post_id, title, body, url, subreddit, published_utc
@@ -96,54 +97,53 @@ def fetch_rss_feed(user_agent: str | None = None) -> list[dict]:
         "python:sarna_monitor:v4.0 (by /u/sarna_bot)",
     )
 
-    print(f"  📡 Fetching RSS: {RSS_FEED_URL[:80]}...")
-
-    try:
-        resp = requests.get(
-            RSS_FEED_URL,
-            headers={"User-Agent": ua},
-            timeout=30,
-        )
-        resp.raise_for_status()
-    except requests.RequestException as e:
-        print(f"  ❌ RSS fetch failed: {e}")
-        return []
-
-    feed = feedparser.parse(resp.text)
-
-    if feed.bozo and not feed.entries:
-        print(f"  ❌ RSS parse error: {feed.bozo_exception}")
-        return []
+    print(f"  📡 Fetching RSS from {len(TARGET_SUBREDDITS)} subreddits individually...")
 
     entries = []
-    for entry in feed.entries:
-        # Extract post ID from the entry link URL
-        # URL format: https://www.reddit.com/r/shopify/comments/abc123/title/
-        post_id = _extract_post_id(entry.get("link", "") or entry.get("id", ""))
-        if not post_id:
-            continue
+    
+    for sub in TARGET_SUBREDDITS:
+        url = f"https://www.reddit.com/r/{sub}/new/.rss"
+        try:
+            resp = requests.get(
+                url,
+                headers={"User-Agent": ua},
+                timeout=15,
+            )
+            resp.raise_for_status()
+            feed = feedparser.parse(resp.text)
+            
+            if feed.bozo and not feed.entries:
+                continue
+                
+            for entry in feed.entries:
+                post_id = _extract_post_id(entry.get("link", "") or entry.get("id", ""))
+                if not post_id:
+                    continue
 
-        # Extract subreddit from category tags or URL
-        subreddit = _extract_subreddit(entry)
+                # Force the subreddit to the one we are fetching, or fallback to extraction
+                subreddit = sub if sub else _extract_subreddit(entry)
 
-        # Extract clean text body from HTML summary
-        raw_body = entry.get("summary", "") or ""
-        body = strip_html(raw_body)
+                raw_body = entry.get("summary", "") or ""
+                body = strip_html(raw_body)
+                published_utc = _parse_published_time(entry)
 
-        # Parse publish time
-        published_utc = _parse_published_time(entry)
+                entries.append({
+                    "post_id": post_id,
+                    "title": entry.get("title", "").strip(),
+                    "body": body,
+                    "url": entry.get("link", ""),
+                    "subreddit": subreddit,
+                    "published_utc": published_utc,
+                    "author": _extract_author(entry),
+                })
+        except requests.RequestException:
+            # Skip failed subreddits to keep the pipeline moving
+            pass
+            
+        # Respect Reddit's rate limit for unauthenticated RSS (avoid 429 errors)
+        time.sleep(1.5)
 
-        entries.append({
-            "post_id": post_id,
-            "title": entry.get("title", "").strip(),
-            "body": body,
-            "url": entry.get("link", ""),
-            "subreddit": subreddit,
-            "published_utc": published_utc,
-            "author": _extract_author(entry),
-        })
-
-    print(f"  📥 Parsed {len(entries)} entries from RSS feed")
+    print(f"  📥 Parsed {len(entries)} total entries across all RSS feeds")
     return entries
 
 
@@ -233,11 +233,27 @@ def filter_by_keywords(entries: list[dict]) -> list[dict]:
     max_intent = int(MAX_POSTS_PER_RUN * 0.6)  # 6
     max_value = MAX_POSTS_PER_RUN - max_intent   # 4
 
-    selected = intent_matches[:max_intent] + value_matches[:max_value]
+    selected_intent = []
+    subreddit_counts = {}
+
+    for entry in intent_matches:
+        sub = entry["subreddit"]
+        if len(selected_intent) < max_intent and subreddit_counts.get(sub, 0) < MAX_POSTS_PER_SUBREDDIT:
+            selected_intent.append(entry)
+            subreddit_counts[sub] = subreddit_counts.get(sub, 0) + 1
+
+    selected_value = []
+    for entry in value_matches:
+        sub = entry["subreddit"]
+        if len(selected_value) < max_value and subreddit_counts.get(sub, 0) < MAX_POSTS_PER_SUBREDDIT:
+            selected_value.append(entry)
+            subreddit_counts[sub] = subreddit_counts.get(sub, 0) + 1
+
+    selected = selected_intent + selected_value
 
     print(f"  🎯 Keyword filter: {len(intent_matches)} intent, {len(value_matches)} value")
-    print(f"  ✂️  Selected: {min(len(intent_matches), max_intent)} intent + "
-          f"{min(len(value_matches), max_value)} value = {len(selected)} total")
+    print(f"  ✂️  Selected: {len(selected_intent)} intent + "
+          f"{len(selected_value)} value = {len(selected)} total (max {MAX_POSTS_PER_SUBREDDIT}/subreddit)")
 
     return selected
 

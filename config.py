@@ -227,14 +227,14 @@ FALLBACK_TEMPLATES = [
         "comment": (
             "yeah i've run into this exact thing before. honestly the biggest "
             "culprit is usually that your product pages are asking people to trust "
-            "you with zero social proof — no reviews, no size chart, no clear return "
+            "you with zero social proof: no reviews, no size chart, no clear return "
             "policy. fix those three things and you'll probably see a bump pretty quick. "
             "also worth checking if your meta titles are actually filled in, because "
             "most stores i've looked at have them completely blank, which means google "
-            "can't even find you. curious what your traffic sources look like?"
+            "can't even find you. where is most of your traffic coming from right now?"
         ),
         "dm": (
-            "hey, re: my comment on your post — i've been digging into similar "
+            "hey, re: my comment on your post... i've been digging into similar "
             "problems for a while. we actually run free store audits for shopify "
             "brands that covers exactly the stuff i mentioned (seo gaps, ad waste, "
             "conversion blockers). no strings. want me to run one for your store?"
@@ -242,7 +242,7 @@ FALLBACK_TEMPLATES = [
     },
     {
         "comment": (
-            "one quick thing worth checking today — go to your products, sort by "
+            "one quick thing worth checking today: go to your products, sort by "
             "inventory, and see if any of your active ads are pointing to items "
             "that are low stock or completely out. i've seen stores burn serious "
             "money sending paid traffic to pages where people literally can't buy. "
@@ -251,7 +251,7 @@ FALLBACK_TEMPLATES = [
             "just need to shift budget."
         ),
         "dm": (
-            "hey, following up on my comment — this ad-spend-to-inventory mismatch "
+            "hey, following up on my comment, this ad-spend-to-inventory mismatch "
             "is more common than you'd think. we do free shopify audits that catch "
             "exactly this kind of thing automatically. happy to run one for you "
             "if you're interested, zero cost."
@@ -259,7 +259,7 @@ FALLBACK_TEMPLATES = [
     },
     {
         "comment": (
-            "so this might sound too simple but — check if your products actually "
+            "so this might sound too simple but check if your products actually "
             "have meta titles and descriptions filled in. go to any product in admin, "
             "scroll to the 'search engine listing preview' section at the bottom. if "
             "those are blank (which they are on like 90% of stores i've seen), google "
@@ -267,7 +267,7 @@ FALLBACK_TEMPLATES = [
             "takes an afternoon and it's honestly the highest-roi seo thing you can do."
         ),
         "dm": (
-            "hey, re: the seo stuff i mentioned — we actually have a tool that "
+            "hey, re: the seo stuff i mentioned, we actually have a tool that "
             "scans your entire shopify catalog and flags every missing meta field, "
             "broken url handle, and seo gap automatically. free audit, no catch. "
             "want me to run it on your store?"
@@ -299,7 +299,7 @@ FALLBACK_TEMPLATES = [
             "pumping more into instagram. worth checking at least."
         ),
         "dm": (
-            "hey, re: my comment about channel mismatch — we run free shopify "
+            "hey, re: my comment about channel mismatch... we run free shopify "
             "store audits that break down conversion rate by channel and flag "
             "exactly where money is being wasted vs. where it's converting. "
             "happy to do one for your store if you want."

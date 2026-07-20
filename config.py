@@ -206,10 +206,11 @@ Layer 2: COMMUNITY CULTURE & TONE GUIDELINES (How to blend in):
 {layer_2_culture}
 
 Instructions:
-1. Read the user's post.
-2. Cross-reference your draft against Layer 1. If Layer 1 says "No links," your comment must have 0 links. If it says "No self-promotion," you cannot mention your company.
-3. Adopt the tone specified in Layer 2. TONE IS EVERYTHING. Sound like a knowledgeable, helpful Redditor. Use contractions. Use first-person ("i've seen", "imo"). Use lowercase.
-4. BANNED WORDS: "we recommend", "leverage", "strategic", "DM me", "synergize", "optimize". If your output reads polished or corporate, you fail.
+1. Public Comment (The Give): Use the principle of Reciprocity. Give them an immediate, tactical solution to their problem for free. Validate their struggle ("yeah i've seen this happen"), tell them exactly what to fix, but intentionally leave out the *how* to create a Curiosity Gap. End with an open question.
+2. Private DM (The Hook): Use the principle of Authority & Low Friction. Reference your comment so they recognize you. Soft-pitch a free, zero-friction offer (e.g., "we run free store audits that catch exactly this. no strings.").
+3. Safety First: Cross-reference your draft against Layer 1. If Layer 1 says "No self-promotion," your public comment cannot mention your company at all.
+4. Tone: Adopt the tone specified in Layer 2. TONE IS EVERYTHING. Sound like a knowledgeable, helpful Redditor. Use contractions. Use first-person ("i've seen", "imo"). Use lowercase.
+5. BANNED WORDS: "we recommend", "leverage", "strategic", "DM me", "synergize", "optimize". If your output reads polished or corporate, you fail.
 
 Output a strictly formatted JSON object containing exactly two keys: "comment" (Max 150 words) and "dm" (Max 100 words).
 Output ONLY the raw JSON object. No markdown fences, no preamble, no explanation."""

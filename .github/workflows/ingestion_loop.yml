@@ -1,0 +1,64 @@
+# =============================================================================
+# SARNA v4.0 — Ingestion Loop
+# =============================================================================
+# Runs every 60 minutes to capture Reddit posts before RSS buffer flushes.
+# Pipeline: RSS fetch → keyword filter → Gemini comment gen → Google Sheets
+#
+# Monthly usage: ~720 runs × ~1 min avg = ~720 of 2,000 free minutes
+# =============================================================================
+
+name: SARNA Ingestion Loop
+
+on:
+  schedule:
+    # Every 60 minutes (UTC, timezone-agnostic for hourly runs)
+    - cron: '0 * * * *'
+
+  # Manual trigger from GitHub Actions UI (for testing)
+  workflow_dispatch:
+
+permissions:
+  contents: write  # CRITICAL: Required for git push of processed_posts.json
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      # 1. Check out the repository (with token for push)
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # 2. Set up Python
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      # 3. Install dependencies
+      - name: 📦 Install dependencies
+        run: pip install -r requirements.txt
+
+      # 4. Run the ingestion pipeline
+      - name: 🚀 Run SARNA Ingestion
+        env:
+          PYTHONIOENCODING: "utf-8"
+          REDDIT_USER_AGENT: ${{ secrets.REDDIT_USER_AGENT }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GOOGLE_SHEETS_CREDENTIALS: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+        run: python main.py --mode ingestion
+
+      # 5. CRITICAL: Commit processed_posts.json back to repo
+      #    Without this, deduplication breaks across runs
+      - name: 💾 Commit state ledger
+        run: |
+          git config user.email "action@github.com"
+          git config user.name "SARNA Agent"
+          git add processed_posts.json
+          git diff --cached --quiet || git commit -m "🤖 Update processed posts ledger [skip ci]"
+          git push

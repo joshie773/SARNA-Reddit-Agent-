@@ -179,7 +179,7 @@ SUBREDDIT_COMPLIANCE = {
 # GEMINI CONFIGURATION
 # =============================================================================
 GEMINI_MODEL = "gemini-2.0-flash"
-GEMINI_SLEEP_BETWEEN_CALLS = 4.5  # seconds — protects 15 RPM free tier
+GEMINI_SLEEP_BETWEEN_CALLS = 10  # seconds — keeps us safely under 15 RPM free tier
 GEMINI_MAX_RETRIES = 2
 
 # Words that trigger automatic regeneration or fallback

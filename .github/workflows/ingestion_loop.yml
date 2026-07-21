@@ -12,7 +12,7 @@ name: SARNA Ingestion Loop
 on:
   schedule:
     # Every 60 minutes (UTC, timezone-agnostic for hourly runs)
-    - cron: '0 * * * *'
+    - cron: '5 * * * *'
 
   # Manual trigger from GitHub Actions UI (for testing)
   workflow_dispatch:

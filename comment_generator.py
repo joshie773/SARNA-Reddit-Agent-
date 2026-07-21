@@ -18,12 +18,16 @@ import random
 import re
 import time
 
+import requests
 from google import genai
 
 from config import (
     GEMINI_MODEL,
     GEMINI_SLEEP_BETWEEN_CALLS,
     GEMINI_MAX_RETRIES,
+    GROQ_MODEL,
+    GROQ_API_BASE,
+    GROQ_MAX_RETRIES,
     BANNED_WORDS,
     SYSTEM_PROMPT_TEMPLATE,
     SUBREDDIT_COMPLIANCE,
@@ -195,6 +199,86 @@ def generate_with_gemini(
 
 
 # =============================================================================
+# Groq Generation (Secondary Fallback)
+# =============================================================================
+def generate_with_groq(post: dict) -> dict | None:
+    """
+    Generate comment + DM using Groq via standard HTTP request.
+    Handles banned word checks similarly to Gemini.
+    """
+    api_key = os.environ.get("GROQ_API_KEY")
+    if not api_key:
+        print("    ⚠️  GROQ_API_KEY not set — skipping secondary LLM fallback")
+        return None
+
+    subreddit = post.get("subreddit", "unknown")
+    system_prompt = _build_system_prompt(subreddit)
+    user_prompt = _build_prompt(post)
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+
+    for attempt in range(1, GROQ_MAX_RETRIES + 2):
+        try:
+            payload = {
+                "model": GROQ_MODEL,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                "temperature": 0.7
+            }
+
+            resp = requests.post(GROQ_API_BASE, json=payload, headers=headers, timeout=20)
+            
+            # If rate limited by Groq, fail fast
+            if resp.status_code == 429:
+                print(f"    ⚠️  Groq rate limited (429).")
+                return None
+                
+            resp.raise_for_status()
+            
+            raw_text = resp.json()["choices"][0]["message"]["content"]
+            if not raw_text:
+                print(f"    ⚠️  Empty Groq response (attempt {attempt})")
+                continue
+
+            parsed = parse_llm_json(raw_text)
+            if not parsed:
+                print(f"    ⚠️  Invalid JSON from Groq (attempt {attempt})")
+                continue
+
+            comment_violations = check_blacklist(parsed["comment"])
+            dm_violations = check_blacklist(parsed.get("dm", ""))
+            all_violations = comment_violations + dm_violations
+
+            if all_violations:
+                print(f"    ⚠️  Groq banned words detected: {all_violations[:3]} (attempt {attempt})")
+                if attempt <= GROQ_MAX_RETRIES:
+                    user_prompt += (
+                        f"\n\nCRITICAL RETRY: Your previous output contained banned words: "
+                        f"{', '.join(all_violations)}. "
+                        f"Remove ALL corporate jargon. Sound like a real human. "
+                        f"Use lowercase, contractions, casual fillers."
+                    )
+                    continue
+                else:
+                    print(f"    ❌ Groq banned words persist after retries")
+                    return None
+
+            print(f"    ✅ Successfully generated with Groq ({GROQ_MODEL})")
+            return parsed
+
+        except Exception as e:
+            print(f"    ❌ Groq API error (attempt {attempt}): {e}")
+            continue
+
+    return None
+
+
+# =============================================================================
 # Fallback template selection
 # =============================================================================
 def get_fallback_template(post: dict) -> dict:
@@ -220,21 +304,26 @@ def generate_comment_and_dm(
     """
     Generate a public comment and private DM for a Reddit post.
 
-    Tries Gemini first, falls back to pre-written templates on failure.
-
-    Args:
-        post: Dict with 'title', 'body', 'subreddit', 'url' keys
-        model: Initialized Gemini model (or None for template-only mode)
-
-    Returns:
-        Dict with 'comment' (str) and 'dm' (str) keys. Always returns something.
+    Execution Flow:
+      1. Try Gemini (Primary)
+      2. Try Groq (Secondary Fallback)
+      3. Try Pre-written Templates (Tertiary Fallback)
     """
     if client is not None:
+        print(f"    🤖 Attempting Gemini generation...")
         result = generate_with_gemini(client, post)
         if result:
             return result
-        print(f"    ↩️  Gemini failed completely, falling back to template...")
+        print(f"    ⚠️  Gemini failed or rate-limited. Falling back to Groq...")
+    else:
+        print(f"    ⚠️  Gemini client unavailable. Attempting Groq...")
 
+    print(f"    🤖 Attempting Groq generation...")
+    groq_result = generate_with_groq(post)
+    if groq_result:
+        return groq_result
+
+    print(f"    ↩️  Groq failed, falling back to template...")
     return get_fallback_template(post)
 
 

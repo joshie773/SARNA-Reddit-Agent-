@@ -49,6 +49,7 @@ jobs:
           PYTHONIOENCODING: "utf-8"
           REDDIT_USER_AGENT: ${{ secrets.REDDIT_USER_AGENT }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GOOGLE_SHEETS_CREDENTIALS: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS }}
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
         run: python main.py --mode ingestion

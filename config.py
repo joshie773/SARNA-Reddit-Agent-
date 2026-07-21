@@ -187,6 +187,13 @@ GEMINI_MODEL = "gemini-2.0-flash"
 GEMINI_SLEEP_BETWEEN_CALLS = 10  # seconds — keeps us safely under 15 RPM free tier
 GEMINI_MAX_RETRIES = 1
 
+# =============================================================================
+# GROQ CONFIGURATION (Secondary Fallback)
+# =============================================================================
+GROQ_MODEL = "llama-3.3-70b-versatile"
+GROQ_API_BASE = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_MAX_RETRIES = 1
+
 # Words that trigger automatic regeneration or fallback
 BANNED_WORDS = [
     "we recommend", "leverage", "strategic", "dm me", "synergize",

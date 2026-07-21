@@ -20,6 +20,7 @@ import time
 
 import requests
 from google import genai
+from google.genai import types
 
 from config import (
     GEMINI_MODEL,
@@ -55,11 +56,15 @@ def init_gemini() -> genai.Client | None:
 # =============================================================================
 def check_blacklist(text: str) -> list[str]:
     """
-    Scan text for banned corporate jargon and promotional phrases.
+    Scan text for banned corporate jargon and promotional phrases using word boundaries.
     Returns list of found violations (empty if clean).
     """
     text_lower = text.lower()
-    violations = [word for word in BANNED_WORDS if word in text_lower]
+    violations = []
+    for word in BANNED_WORDS:
+        pattern = r'\b' + re.escape(word) + r'\b'
+        if re.search(pattern, text_lower):
+            violations.append(word)
     return violations
 
 
@@ -109,12 +114,19 @@ def _build_prompt(post: dict) -> str:
     """Build the user prompt containing the post data for Gemini."""
     title = post.get("title", "")
     body = post.get("body", "")[:500]  # Cap body at 500 chars for token efficiency
+    
+    user_prompts = [
+        "Write comment and DM for this post.",
+        "Generate comment + DM.",
+        "Create a comment and private message.",
+    ]
+    user_prompt_variant = random.choice(user_prompts)
 
     return (
         f"POST TITLE: {title}\n\n"
         f"POST BODY: {body if body else '(no body text — title only)'}\n\n"
         f"This post was found in r/{post.get('subreddit', 'unknown')}. "
-        f"Generate the JSON output now."
+        f"{user_prompt_variant}"
     )
 
 
@@ -148,7 +160,11 @@ def generate_with_gemini(
         try:
             response = client.models.generate_content(
                 model=GEMINI_MODEL,
-                contents=f"SYSTEM INSTRUCTIONS:\n{system_prompt}\n\nUSER REQUEST:\n{user_prompt}",
+                contents=user_prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                    temperature=1.5,
+                ),
             )
 
             raw_text = response.text
@@ -228,7 +244,7 @@ def generate_with_groq(post: dict) -> dict | None:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                "temperature": 0.7
+                "temperature": 1.5
             }
 
             resp = requests.post(GROQ_API_BASE, json=payload, headers=headers, timeout=20)

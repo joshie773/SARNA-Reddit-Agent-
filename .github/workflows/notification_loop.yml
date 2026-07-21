@@ -11,10 +11,10 @@ name: SARNA Notification Loop
 
 on:
   schedule:
-    # 9:05 AM IST = 3:35 AM UTC (shifted 5m to un-stick GitHub scheduler)
-    - cron: '35 3 * * *'
-    # 9:05 PM IST = 3:35 PM UTC
-    - cron: '35 15 * * *'
+    # 09:00 AM IST = 03:30 AM UTC
+    - cron: '30 3 * * *'
+    # 09:00 PM IST = 03:30 PM UTC
+    - cron: '30 15 * * *'
 
   # Manual trigger from GitHub Actions UI
   workflow_dispatch:

@@ -205,26 +205,28 @@ BANNED_WORDS = [
 ]
 
 # =============================================================================
-# GEMINI SYSTEM PROMPT TEMPLATE (from PRD — do not modify structure)
 # =============================================================================
-SYSTEM_PROMPT_TEMPLATE = """You are an elite AI networking agent for Sahajta AI. Your goal is to draft a helpful public comment and a private DM response for a post in r/{subreddit_name}.
-You must strictly adhere to the following two compliance layers:
+# GEMINI & GROQ SYSTEM PROMPT TEMPLATE (from PRD — do not modify structure)
+# =============================================================================
+SYSTEM_PROMPT_TEMPLATE = """You are a highly experienced, real-world e-commerce founder hanging out on Reddit (r/{subreddit_name}). You aren't an AI, a marketer, or a corporate bot. You're just a person who has been in the trenches and genuinely wants to help someone out.
 
-Layer 1: CURRENT LIVE SUBREDDIT RULES (Enforced Banned Actions):
-{layer_1_rules}
+You need to draft a public comment and a private DM in response to a post.
 
-Layer 2: COMMUNITY CULTURE & TONE GUIDELINES (How to blend in):
-{layer_2_culture}
+Strict Compliance Layers:
+Layer 1 (Subreddit Rules): {layer_1_rules}
+Layer 2 (Subreddit Culture): {layer_2_culture}
 
-Instructions:
-1. Public Comment (The Give): Use the principle of Reciprocity. Give them an immediate, tactical solution to their problem for free. Validate their struggle ("yeah i've seen this happen"), tell them exactly what to fix, but intentionally leave out the *how* to create a Curiosity Gap. End with an open question.
-2. Private DM (The Hook): Use the principle of Authority & Low Friction. Reference your comment so they recognize you. Soft-pitch a free, zero-friction offer (e.g., "we run free store audits that catch exactly this. no strings.").
-3. Safety First: Cross-reference your draft against Layer 1. If Layer 1 says "No self-promotion," your public comment cannot mention your company at all.
-4. Tone: Adopt the tone specified in Layer 2. TONE IS EVERYTHING. Sound like a knowledgeable, helpful Redditor. Use contractions. Use first-person ("i've seen", "imo"). Use lowercase.
-5. BANNED WORDS: "we recommend", "leverage", "strategic", "DM me", "synergize", "optimize". If your output reads polished or corporate, you fail.
+How to write (Raw Reddit Voice):
+- Sound completely authentic, warm, and casual. Talk like you're speaking to a peer. 
+- Give immediate, tactical, actionable advice based on your "experience". 
+- Do NOT use formal structure or overly polished language. Use lowercase, contractions, and natural pacing. 
+- NEVER use em-dashes (—) or mid-sentence dashes (-).
+- At the end of the DM, add a gentle, soft statement offering a free audit (e.g., "i can run a free audit on your store if you want a second set of eyes."). Do NOT ask a question.
+- CRITICAL BANNED WORDS: "we recommend", "leverage", "strategic", "DM me", "synergize", "optimize". If you sound corporate, you fail.
 
 Output a strictly formatted JSON object containing exactly two keys: "comment" (Max 150 words) and "dm" (Max 100 words).
 Output ONLY the raw JSON object. No markdown fences, no preamble, no explanation."""
+
 
 # =============================================================================
 # FALLBACK COMMENT TEMPLATES (human-written, 100% casual)
@@ -239,46 +241,51 @@ FALLBACK_TEMPLATES = [
             "policy. fix those three things and you'll probably see a bump pretty quick. "
             "also worth checking if your meta titles are actually filled in, because "
             "most stores i've looked at have them completely blank, which means google "
-            "can't even find you. where is most of your traffic coming from right now?"
+            "can't even find you. checking analytics by channel first is usually the best "
+            "way to see where the dropoff starts."
         ),
         "dm": (
-            "hey, re: my comment on your post... i've been digging into similar "
-            "problems for a while. we actually run free store audits for shopify "
-            "brands that covers exactly the stuff i mentioned (seo gaps, ad waste, "
-            "conversion blockers). no strings. want me to run one for your store?"
+            "hey, re: my comment on your post, i've been digging into similar "
+            "problems for a while. if you want to look into it yourself, the first "
+            "thing i would verify is whether your checkout loads under three seconds "
+            "on mobile, since that is where most stores leak sales. we also run free "
+            "store audits that trace checkout speed and ad waste automatically. "
+            "i can run one for your store if you want a second set of eyes."
         ),
     },
     {
         "comment": (
-            "one quick thing worth checking today: go to your products, sort by "
-            "inventory, and see if any of your active ads are pointing to items "
+            "one quick thing worth checking today is sorting your products by "
+            "inventory and seeing if any of your active ads are pointing to items "
             "that are low stock or completely out. i've seen stores burn serious "
             "money sending paid traffic to pages where people literally can't buy. "
-            "takes like 5 minutes to cross-check. also, are you tracking conversion "
-            "rate by channel? sometimes one channel converts way better and you "
-            "just need to shift budget."
+            "it takes about 5 minutes to cross check. tracking conversion rate by "
+            "channel is key, since shifting budget to the highest converting channel "
+            "is usually the easiest win."
         ),
         "dm": (
-            "hey, following up on my comment, this ad-spend-to-inventory mismatch "
-            "is more common than you'd think. we do free shopify audits that catch "
-            "exactly this kind of thing automatically. happy to run one for you "
-            "if you're interested, zero cost."
+            "hey, following up on my comment, this ad spend to inventory mismatch "
+            "is more common than you think. checking your ads manager to verify "
+            "out of stock product links takes just a few minutes and saves a lot of "
+            "budget. we also do free shopify audits that catch exactly this kind of "
+            "thing automatically, so feel free to reach out if you want me to run one."
         ),
     },
     {
         "comment": (
             "so this might sound too simple but check if your products actually "
             "have meta titles and descriptions filled in. go to any product in admin, "
-            "scroll to the 'search engine listing preview' section at the bottom. if "
-            "those are blank (which they are on like 90% of stores i've seen), google "
+            "scroll to the search engine listing preview section at the bottom. if "
+            "those are blank, which they are on most stores i've seen, google "
             "basically can't index your stuff. filling those in for your top sellers "
-            "takes an afternoon and it's honestly the highest-roi seo thing you can do."
+            "takes an afternoon and it is the highest ROI SEO thing you can do."
         ),
         "dm": (
-            "hey, re: the seo stuff i mentioned, we actually have a tool that "
-            "scans your entire shopify catalog and flags every missing meta field, "
-            "broken url handle, and seo gap automatically. free audit, no catch. "
-            "want me to run it on your store?"
+            "hey, re: the SEO stuff i mentioned, most broken link issues come from "
+            "old collection urls that were renamed in the admin. checking your "
+            "redirects in the online store settings is a great first step. we also "
+            "have a tool that scans your entire catalog and flags missing meta fields "
+            "automatically. i can run it on your store if you want to double check."
         ),
     },
     {
@@ -286,31 +293,33 @@ FALLBACK_TEMPLATES = [
             "honestly this is wild but shopify doesn't update a product's url handle "
             "when you rename it in the dashboard. so if you changed a collection name "
             "or product title, the old url slug is still what your instagram bio or "
-            "old ad creatives link to. worth clicking through all your external links "
-            "right now and making sure they actually land where you think. i've seen "
-            "bio links silently 404 for months."
+            "old ad creatives link to. it is worth clicking through all your external "
+            "links right now and making sure they actually land where you think. i've "
+            "seen bio links silently 404 for months."
         ),
         "dm": (
-            "hey, that url handle issue i mentioned bites more stores than you'd "
-            "expect. we do free store audits that catch broken links, seo gaps, "
-            "and inventory mismatches automatically. want me to run one for your "
-            "store? takes about a day, zero cost."
+            "hey, that url handle issue i mentioned bites more stores than you "
+            "expect. a quick way to check is using a free chrome extension like "
+            "redirect path to audit your social links. we also do free store audits "
+            "that catch broken links and inventory mismatches automatically. "
+            "i can run one for your store if you want to make sure your links are solid."
         ),
     },
     {
         "comment": (
             "before scaling ad spend, pull up your analytics by channel and compare "
             "conversion rates. in a ton of stores i've looked at, the small amount of "
-            "google organic traffic converts like 4-6x better than paid social. if "
-            "that's your case too, investing an afternoon in seo (meta titles, product "
-            "descriptions, alt text) might get you way more revenue per dollar than "
-            "pumping more into instagram. worth checking at least."
+            "google organic traffic converts much better than paid social. if that "
+            "is your case too, investing an afternoon in seo, like meta titles, product "
+            "descriptions, and alt text, might get you way more revenue per dollar than "
+            "pumping more into instagram."
         ),
         "dm": (
-            "hey, re: my comment about channel mismatch... we run free shopify "
-            "store audits that break down conversion rate by channel and flag "
-            "exactly where money is being wasted vs. where it's converting. "
-            "happy to do one for your store if you want."
+            "hey, re: my comment about channel mismatch, you can compare organic "
+            "versus paid social conversion rates directly in your shopify analytics "
+            "under reports. we also run free shopify store audits that break down "
+            "conversion rate by channel and flag where ad spend is being wasted. "
+            "i can run one for your store if you want a breakdown."
         ),
     },
 ]

@@ -17,8 +17,7 @@ TARGET_SUBREDDITS = [
 
 # =============================================================================
 # POST FILTERING & SCORING
-# =============================================================================
-MAX_POSTS_PER_RUN = 10
+MAX_POSTS_PER_RUN = 20
 
 # Relevance scoring weights (out of 100)
 SCORE_WEIGHT_INTENT = 40
@@ -185,7 +184,7 @@ SUBREDDIT_COMPLIANCE = {
 # =============================================================================
 GEMINI_MODEL = "gemini-2.0-flash"
 GEMINI_SLEEP_BETWEEN_CALLS = 10  # seconds — keeps us safely under 15 RPM free tier
-GEMINI_MAX_RETRIES = 1
+GEMINI_MAX_RETRIES = 0
 
 # =============================================================================
 # GROQ CONFIGURATION (Secondary Fallback)

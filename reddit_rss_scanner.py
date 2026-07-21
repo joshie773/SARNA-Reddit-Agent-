@@ -20,13 +20,17 @@ import requests
 
 from config import (
     TARGET_SUBREDDITS,
-    MAX_POSTS_PER_SUBREDDIT,
     INTENT_KEYWORDS,
     VALUE_KEYWORDS,
     MAX_POSTS_PER_RUN,
     MAX_POST_AGE_DAYS,
     PROCESSED_POSTS_FILE,
     PROCESSED_POSTS_MAX,
+    SCORE_WEIGHT_INTENT,
+    SCORE_WEIGHT_VALUE,
+    SCORE_WEIGHT_FRESHNESS,
+    SCORE_WEIGHT_BODY_LENGTH,
+    SCORE_WEIGHT_DIVERSITY,
 )
 
 
@@ -197,64 +201,90 @@ def _parse_published_time(entry) -> datetime | None:
 
 
 # =============================================================================
-# Keyword filtering (60/40 intent/value split)
+# Keyword tagging & Scoring
 # =============================================================================
-def filter_by_keywords(entries: list[dict]) -> list[dict]:
+def tag_by_keywords(entries: list[dict]) -> list[dict]:
     """
-    Apply the 60/40 intent/value keyword filter.
-    Returns entries sorted by match type (intent first, then value).
+    Tag posts with keyword match scores.
+    Returns all posts that have at least one intent or value keyword hit.
     """
-    intent_matches = []
-    value_matches = []
+    tagged = []
 
     for entry in entries:
         searchable = f"{entry['title']} {entry['body']}".lower()
 
-        # Check intent keywords (60% priority)
         intent_score = sum(1 for kw in INTENT_KEYWORDS if kw in searchable)
-
-        # Check value keywords (40%)
         value_score = sum(1 for kw in VALUE_KEYWORDS if kw in searchable)
 
-        if intent_score > 0:
-            entry["match_type"] = "intent"
-            entry["match_score"] = intent_score
-            intent_matches.append(entry)
-        elif value_score > 0:
-            entry["match_type"] = "value"
-            entry["match_score"] = value_score
-            value_matches.append(entry)
+        if intent_score > 0 or value_score > 0:
+            entry["intent_score"] = intent_score
+            entry["value_score"] = value_score
+            if intent_score > 0:
+                entry["match_type"] = "intent"
+            else:
+                entry["match_type"] = "value"
+            tagged.append(entry)
 
-    # Sort each group by match score (highest first)
-    intent_matches.sort(key=lambda x: -x["match_score"])
-    value_matches.sort(key=lambda x: -x["match_score"])
+    print(f"  🎯 Keyword tagging: {len(tagged)} posts with hits")
+    return tagged
 
-    # Apply 60/40 split: 6 intent + 4 value (from max 10)
-    max_intent = int(MAX_POSTS_PER_RUN * 0.6)  # 6
-    max_value = MAX_POSTS_PER_RUN - max_intent   # 4
 
-    selected_intent = []
+def score_post(post: dict) -> float:
+    """Calculate the base relevance score (out of 95, 5 reserved for diversity)."""
+    intent_pts = min(post.get("intent_score", 0) * 10, SCORE_WEIGHT_INTENT)
+    value_pts = min(post.get("value_score", 0) * 8, SCORE_WEIGHT_VALUE)
+    
+    # Freshness (linear decay over MAX_POST_AGE_DAYS)
+    age_hours = post.get("age_hours", 0)
+    max_age_hours = MAX_POST_AGE_DAYS * 24
+    freshness_pts = max(0, SCORE_WEIGHT_FRESHNESS * (1 - (age_hours / max_age_hours)))
+    
+    # Body length
+    body_len = len(post.get("body", ""))
+    length_pts = min(body_len / 100.0, SCORE_WEIGHT_BODY_LENGTH)
+    
+    base_score = intent_pts + value_pts + freshness_pts + length_pts
+    return base_score
+
+
+def rank_and_select(posts: list[dict], max_posts: int = 10) -> list[dict]:
+    """
+    Apply diversity bonus, score, rank, and format relevance string.
+    """
+    # Sort initially by base score to prioritize the absolute best posts
+    for p in posts:
+        p["base_score"] = score_post(p)
+        
+    posts.sort(key=lambda x: x["base_score"], reverse=True)
+    
     subreddit_counts = {}
+    for p in posts:
+        sub = p["subreddit"]
+        count = subreddit_counts.get(sub, 0)
+        
+        bonus = 0
+        if count == 0:
+            bonus = 5
+        elif count == 1:
+            bonus = 3
+            
+        subreddit_counts[sub] = count + 1
+        
+        total_score = min(100.0, p["base_score"] + bonus)
+        p["total_score"] = round(total_score, 1)
+        
+        intent = p.get('intent_score', 0)
+        val = p.get('value_score', 0)
+        age = p.get('age_hours', 0)
+        p["relevance_string"] = f"{p['total_score']}/100 — {intent} intent, {val} value, {int(age)}h old"
 
-    for entry in intent_matches:
-        sub = entry["subreddit"]
-        if len(selected_intent) < max_intent and subreddit_counts.get(sub, 0) < MAX_POSTS_PER_SUBREDDIT:
-            selected_intent.append(entry)
-            subreddit_counts[sub] = subreddit_counts.get(sub, 0) + 1
-
-    selected_value = []
-    for entry in value_matches:
-        sub = entry["subreddit"]
-        if len(selected_value) < max_value and subreddit_counts.get(sub, 0) < MAX_POSTS_PER_SUBREDDIT:
-            selected_value.append(entry)
-            subreddit_counts[sub] = subreddit_counts.get(sub, 0) + 1
-
-    selected = selected_intent + selected_value
-
-    print(f"  🎯 Keyword filter: {len(intent_matches)} intent, {len(value_matches)} value")
-    print(f"  ✂️  Selected: {len(selected_intent)} intent + "
-          f"{len(selected_value)} value = {len(selected)} total (max {MAX_POSTS_PER_SUBREDDIT}/subreddit)")
-
+    # Re-sort by total score
+    posts.sort(key=lambda x: x["total_score"], reverse=True)
+    
+    selected = posts[:max_posts]
+    if selected:
+        print(f"  🏆 Ranked and selected {len(selected)} posts (top score: {selected[0]['total_score']}/100)")
+    
     return selected
 
 
@@ -302,7 +332,7 @@ def deduplicate(entries: list[dict], processed_ids: set) -> list[dict]:
 # =============================================================================
 def scan_reddit() -> tuple[list[dict], set]:
     """
-    Full scan pipeline: fetch → filter freshness → deduplicate → filter keywords → cap.
+    Full scan pipeline: fetch → filter freshness → deduplicate → tag → rank_and_select.
 
     Returns:
         - List of qualified post dicts (max MAX_POSTS_PER_RUN)
@@ -331,13 +361,11 @@ def scan_reddit() -> tuple[list[dict], set]:
         print("  😴 All entries already processed. No new posts this run.")
         return [], processed_ids
 
-    # Step 4: Apply keyword filter (60/40 split)
-    qualified = filter_by_keywords(new_entries)
+    # Step 4: Tag by keywords
+    tagged = tag_by_keywords(new_entries)
 
-    # Step 5: Cap to max posts per run
-    if len(qualified) > MAX_POSTS_PER_RUN:
-        qualified = qualified[:MAX_POSTS_PER_RUN]
-        print(f"  ✂️  Capped at {MAX_POSTS_PER_RUN} posts")
+    # Step 5: Rank and select
+    qualified = rank_and_select(tagged, max_posts=MAX_POSTS_PER_RUN)
 
     # Update ledger with new post IDs
     new_ids = {e["post_id"] for e in qualified}
@@ -369,6 +397,7 @@ if __name__ == "__main__":
         print(f"  Title:     {p['title'][:80]}")
         print(f"  Subreddit: r/{p['subreddit']}")
         print(f"  Type:      {p.get('match_type', 'n/a')}")
-        print(f"  Score:     {p.get('match_score', 0)} keyword hits")
+        print(f"  Score:     {p.get('total_score', 0)}/100")
+        print(f"  Relevance: {p.get('relevance_string', '')}")
         print(f"  URL:       {p['url']}")
     print(f"\nTotal qualified: {len(posts)}")

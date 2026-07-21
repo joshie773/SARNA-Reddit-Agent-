@@ -93,7 +93,8 @@ def run_ingestion(test_mode: bool = False):
     success_count = 0
 
     for i, post in enumerate(posts, 1):
-        print(f"\n  [{i}/{len(posts)}] r/{post['subreddit']}: {post['title'][:60]}...")
+        score_str = post.get('relevance_string', 'N/A')
+        print(f"\n  [{i}/{len(posts)}] r/{post['subreddit']} (Relevance: {score_str}): {post['title'][:60]}...")
 
         try:
             # Generate comment and DM
@@ -127,7 +128,7 @@ def run_ingestion(test_mode: bool = False):
     elif test_mode and rows:
         print(f"\n📊 Step 5: TEST MODE — {len(rows)} rows generated but NOT written to Sheet")
         for j, row in enumerate(rows, 1):
-            print(f"  Row {j}: {row[0]} | {row[2][:60]}...")
+            print(f"  Row {j}: {row[0]} | Score: {row[5]} | {row[2][:60]}...")
 
     # =========================================================================
     # Step 6: Save processed posts ledger

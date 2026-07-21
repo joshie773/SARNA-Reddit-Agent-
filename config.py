@@ -15,12 +15,17 @@ TARGET_SUBREDDITS = [
     "ShopifyAppDev", "shopifyDev",
 ]
 
-MAX_POSTS_PER_SUBREDDIT = 3
-
 # =============================================================================
-# POST FILTERING
+# POST FILTERING & SCORING
 # =============================================================================
 MAX_POSTS_PER_RUN = 10
+
+# Relevance scoring weights (out of 100)
+SCORE_WEIGHT_INTENT = 40
+SCORE_WEIGHT_VALUE = 25
+SCORE_WEIGHT_FRESHNESS = 20
+SCORE_WEIGHT_BODY_LENGTH = 10
+SCORE_WEIGHT_DIVERSITY = 5
 MAX_POST_AGE_DAYS = 7
 PROCESSED_POSTS_FILE = "processed_posts.json"
 PROCESSED_POSTS_MAX = 1000  # Auto-prune older entries
@@ -180,7 +185,7 @@ SUBREDDIT_COMPLIANCE = {
 # =============================================================================
 GEMINI_MODEL = "gemini-2.0-flash"
 GEMINI_SLEEP_BETWEEN_CALLS = 10  # seconds — keeps us safely under 15 RPM free tier
-GEMINI_MAX_RETRIES = 2
+GEMINI_MAX_RETRIES = 1
 
 # Words that trigger automatic regeneration or fallback
 BANNED_WORDS = [
@@ -312,8 +317,8 @@ EMAIL_SUBJECT_TEMPLATE = "🔍 SARNA — Reddit Opportunities {date} {period}"
 GOOGLE_SHEET_URL_TEMPLATE = "https://docs.google.com/spreadsheets/d/{sheet_id}"
 
 # =============================================================================
-# GOOGLE SHEETS SCHEMA (5 columns, append-only)
+# GOOGLE SHEETS SCHEMA (6 columns, append-only)
 # =============================================================================
 SHEET_COLUMNS = ["Subreddit", "Post Title & Link", "AI Suggested Comment",
-                 "Subreddit Guidelines", "AI Suggested DM"]
+                 "Subreddit Guidelines", "AI Suggested DM", "Relevance Score"]
 SHEET_RANGE = "Sheet1"  # Default sheet tab name

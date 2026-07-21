@@ -10,6 +10,7 @@ Schema:
   C: AI Suggested Comment
   D: Subreddit Guidelines
   E: AI Suggested DM
+  F: Relevance Score
 
 Append-only: rows persist indefinitely as a historical log.
 """
@@ -69,7 +70,7 @@ def authenticate_sheets():
 # =============================================================================
 def build_row(post: dict, comment: str, dm: str) -> list:
     """
-    Build a single 5-column row for the Sheet.
+    Build a single 6-column row for the Sheet.
 
     Columns:
       A: Subreddit (e.g., "r/shopify")
@@ -77,6 +78,7 @@ def build_row(post: dict, comment: str, dm: str) -> list:
       C: AI Suggested Comment
       D: Subreddit Guidelines (Layer 1 + Layer 2 from config)
       E: AI Suggested DM
+      F: Relevance Score
     """
     subreddit = post.get("subreddit", "unknown")
     title = post.get("title", "Untitled")
@@ -101,7 +103,10 @@ def build_row(post: dict, comment: str, dm: str) -> list:
     # Column E: AI DM
     col_e = dm
 
-    return [col_a, col_b, col_c, col_d, col_e]
+    # Column F: Relevance Score
+    col_f = post.get("relevance_string", "N/A")
+
+    return [col_a, col_b, col_c, col_d, col_e, col_f]
 
 
 # =============================================================================
@@ -140,7 +145,7 @@ def append_rows(
                 .values()
                 .append(
                     spreadsheetId=sheet_id,
-                    range=f"{SHEET_RANGE}!A:E",
+                    range=f"{SHEET_RANGE}!A:F",
                     valueInputOption="USER_ENTERED",  # Allows HYPERLINK formulas
                     insertDataOption="INSERT_ROWS",
                     body=body,

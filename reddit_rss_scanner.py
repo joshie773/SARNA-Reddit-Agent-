@@ -148,6 +148,7 @@ def fetch_rss_feed(user_agent: str | None = None) -> list[dict]:
         time.sleep(1.5)
 
     print(f"  📥 Parsed {len(entries)} total entries across all RSS feeds")
+    print(f"  ✅ Scanned all {len(TARGET_SUBREDDITS)} subreddits in this run")
     return entries
 
 
@@ -264,9 +265,11 @@ def rank_and_select(posts: list[dict], max_posts: int = 10) -> list[dict]:
         
         bonus = 0
         if count == 0:
-            bonus = 5
+            bonus = 20
         elif count == 1:
-            bonus = 3
+            bonus = 15
+        elif count == 2:
+            bonus = 10
             
         subreddit_counts[sub] = count + 1
         
@@ -284,6 +287,7 @@ def rank_and_select(posts: list[dict], max_posts: int = 10) -> list[dict]:
     selected = posts[:max_posts]
     if selected:
         print(f"  🏆 Ranked and selected {len(selected)} posts (top score: {selected[0]['total_score']}/100)")
+    print(f"  📊 Subreddit distribution: {dict(subreddit_counts)}")
     
     return selected
 

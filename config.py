@@ -20,13 +20,14 @@ TARGET_SUBREDDITS = [
 # Posts with these keywords = store owners with SPECIFIC metric problems RIGHT NOW
 # =============================================================================
 INTENT_KEYWORDS_FOCUSED = [
-    "conversion rate low", "bounce rate high", "cart abandonment",
+    "conversion rate", "bounce rate", "cart abandonment", "abandoned cart",
     "average order value", "customer lifetime value", "cost per acquisition",
-    "why is my traffic not converting", "not converting", "losing sales",
-    "revenue drop", "ads not working", "roi negative",
-    "wasting money on ads", "traffic dropoff", "churn rate",
-    "repeat customer rate", "product performance", "which products sell",
-    "inventory turnover", "breakeven point", "profit margin",
+    "not converting", "no sales", "zero sales", "losing sales", "drop in sales",
+    "sales dropped", "revenue drop", "ads not working", "roi negative", "bad roas",
+    "wasting money", "traffic dropoff", "churn rate", "high cpa", "low roas",
+    "repeat customer", "product performance", "inventory turnover", 
+    "profit margin", "traffic but no sales", "store review", "review my store",
+    "why am i not getting sales", "getting traffic but", "sales have stopped"
 ]
 
 VALUE_KEYWORDS_FOCUSED = [
@@ -45,10 +46,11 @@ VALUE_KEYWORDS_FOCUSED = [
 INTENT_KEYWORDS_BROADER = [
     "scaling strategy", "growth bottleneck", "optimization",
     "trying to improve", "need to understand", "debugging performance",
-    "store review", "what's wrong with my store", "how can i improve",
-    "audit my", "traffic not converting", "sales struggling",
+    "what's wrong with my store", "how can i improve", "decrease in sales",
+    "audit my", "sales struggling", "low sales", "inconsistent sales",
     "need growth", "competitive edge", "market position",
     "pricing strategy", "product mix", "diversify revenue",
+    "seo", "facebook ads", "tiktok ads", "google ads", "marketing strategy"
 ]
 
 VALUE_KEYWORDS_BROADER = [
@@ -90,9 +92,10 @@ SUBREDDIT_WEIGHT = {
 MIN_BODY_LENGTH = 150  # Minimum characters in post body (filters "quick question" posts)
 
 EXCLUDED_PHRASES = [
-    "just starting", "brand new", "how do i", "what's the best",
+    "just starting", "brand new", "how do i start", "what's the best",
     "beginner here", "no experience", "first time", "completely new",
-    "never done this before",
+    "never done this before", "is dropshipping dead", "start a store",
+    "how to start", "new to this", "want to start"
 ]
 
 # =============================================================================

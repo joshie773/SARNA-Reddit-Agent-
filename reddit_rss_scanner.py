@@ -20,8 +20,10 @@ import requests
 
 from config import (
     TARGET_SUBREDDITS,
-    INTENT_KEYWORDS,
-    VALUE_KEYWORDS,
+    INTENT_KEYWORDS_FOCUSED,
+    VALUE_KEYWORDS_FOCUSED,
+    INTENT_KEYWORDS_BROADER,
+    VALUE_KEYWORDS_BROADER,
     MAX_POSTS_PER_RUN,
     MAX_POST_AGE_DAYS,
     PROCESSED_POSTS_FILE,
@@ -31,6 +33,9 @@ from config import (
     SCORE_WEIGHT_FRESHNESS,
     SCORE_WEIGHT_BODY_LENGTH,
     SCORE_WEIGHT_DIVERSITY,
+    SUBREDDIT_WEIGHT,
+    MIN_BODY_LENGTH,
+    EXCLUDED_PHRASES,
 )
 
 
@@ -206,27 +211,50 @@ def _parse_published_time(entry) -> datetime | None:
 # =============================================================================
 def tag_by_keywords(entries: list[dict]) -> list[dict]:
     """
-    Tag posts with keyword match scores.
+    Tag posts with keyword match scores and tier classification.
     Returns all posts that have at least one intent or value keyword hit.
+    
+    Tier 1: Matched FOCUSED keywords (high-intent specific problems)
+    Tier 2: Matched BROADER keywords (strategy/optimization)
     """
     tagged = []
+    tier_1_count = 0
+    tier_2_count = 0
 
     for entry in entries:
         searchable = f"{entry['title']} {entry['body']}".lower()
 
-        intent_score = sum(1 for kw in INTENT_KEYWORDS if kw in searchable)
-        value_score = sum(1 for kw in VALUE_KEYWORDS if kw in searchable)
+        # Check focused keywords
+        focused_intent = sum(1 for kw in INTENT_KEYWORDS_FOCUSED if kw in searchable)
+        focused_value = sum(1 for kw in VALUE_KEYWORDS_FOCUSED if kw in searchable)
+        
+        # Check broader keywords (only if no focused match)
+        broader_intent = sum(1 for kw in INTENT_KEYWORDS_BROADER if kw in searchable) if focused_intent == 0 else 0
+        broader_value = sum(1 for kw in VALUE_KEYWORDS_BROADER if kw in searchable) if focused_value == 0 else 0
+
+        intent_score = focused_intent + broader_intent
+        value_score = focused_value + broader_value
 
         if intent_score > 0 or value_score > 0:
             entry["intent_score"] = intent_score
             entry["value_score"] = value_score
+            
+            # Classify tier
+            if focused_intent > 0 or focused_value > 0:
+                entry["keyword_tier"] = "tier_1_focused"
+                tier_1_count += 1
+            else:
+                entry["keyword_tier"] = "tier_2_broader"
+                tier_2_count += 1
+            
             if intent_score > 0:
                 entry["match_type"] = "intent"
             else:
                 entry["match_type"] = "value"
+            
             tagged.append(entry)
 
-    print(f"  🎯 Keyword tagging: {len(tagged)} posts with hits")
+    print(f"  🎯 Keyword tagging: {len(tagged)} posts with hits (Tier 1: {tier_1_count}, Tier 2: {tier_2_count})")
     return tagged
 
 
@@ -240,9 +268,9 @@ def score_post(post: dict) -> float:
     max_age_hours = MAX_POST_AGE_DAYS * 24
     freshness_pts = max(0, SCORE_WEIGHT_FRESHNESS * (1 - (age_hours / max_age_hours)))
     
-    # Body length
+    # Body length (already filtered, but still score)
     body_len = len(post.get("body", ""))
-    length_pts = min(body_len / 100.0, SCORE_WEIGHT_BODY_LENGTH)
+    length_pts = min(body_len / 200.0, SCORE_WEIGHT_BODY_LENGTH)
     
     base_score = intent_pts + value_pts + freshness_pts + length_pts
     return base_score
@@ -250,9 +278,9 @@ def score_post(post: dict) -> float:
 
 def rank_and_select(posts: list[dict], max_posts: int = 10) -> list[dict]:
     """
-    Apply diversity bonus, score, rank, and format relevance string.
+    Apply weight to BASE SCORE only (not diversity bonus).
+    This makes subreddit preference a quality filter, not a score multiplier.
     """
-    # Sort initially by base score to prioritize the absolute best posts
     for p in posts:
         p["base_score"] = score_post(p)
         
@@ -263,6 +291,7 @@ def rank_and_select(posts: list[dict], max_posts: int = 10) -> list[dict]:
         sub = p["subreddit"]
         count = subreddit_counts.get(sub, 0)
         
+        # Diversity bonus
         bonus = 0
         if count == 0:
             bonus = 20
@@ -273,21 +302,25 @@ def rank_and_select(posts: list[dict], max_posts: int = 10) -> list[dict]:
             
         subreddit_counts[sub] = count + 1
         
-        total_score = min(100.0, p["base_score"] + bonus)
+        # Apply weight to BASE SCORE only, then add bonus
+        subreddit_weight = SUBREDDIT_WEIGHT.get(sub, 1.0)
+        weighted_base = p["base_score"] * subreddit_weight
+        total_score = min(100.0, weighted_base + bonus)
+        
         p["total_score"] = round(total_score, 1)
         
         intent = p.get('intent_score', 0)
         val = p.get('value_score', 0)
         age = p.get('age_hours', 0)
-        p["relevance_string"] = f"{p['total_score']}/100 — {intent} intent, {val} value, {int(age)}h old"
+        tier = p.get('keyword_tier', 'unknown')
+        p["relevance_string"] = f"{p['total_score']}/100 [{tier}] — {intent} intent, {val} value, {int(age)}h old"
 
-    # Re-sort by total score
     posts.sort(key=lambda x: x["total_score"], reverse=True)
     
     selected = posts[:max_posts]
     if selected:
         print(f"  🏆 Ranked and selected {len(selected)} posts (top score: {selected[0]['total_score']}/100)")
-    print(f"  📊 Subreddit distribution: {dict(subreddit_counts)}")
+        print(f"  📊 Subreddit distribution: {dict(subreddit_counts)}")
     
     return selected
 
@@ -296,25 +329,56 @@ def rank_and_select(posts: list[dict], max_posts: int = 10) -> list[dict]:
 # Freshness filter
 # =============================================================================
 def filter_by_freshness(entries: list[dict]) -> list[dict]:
-    """Filter out posts older than MAX_POST_AGE_DAYS."""
+    """
+    Filter out:
+    1. Posts older than MAX_POST_AGE_DAYS
+    2. Posts with body length < MIN_BODY_LENGTH (noise filter)
+    3. Posts containing EXCLUDED_PHRASES (anti-pattern filter)
+    """
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(days=MAX_POST_AGE_DAYS)
     fresh = []
+    length_filtered = 0
+    pattern_filtered = 0
 
     for entry in entries:
+        # Age filter
         pub_time = entry.get("published_utc")
         if pub_time is None:
-            # If no timestamp, include it (benefit of the doubt)
             fresh.append(entry)
+            age_hours = 0
         elif pub_time >= cutoff:
-            # Calculate age for logging
             age_hours = (now - pub_time).total_seconds() / 3600
             entry["age_hours"] = round(age_hours, 1)
+            
+            # Excluded phrases filter
+            body = entry.get("body", "")
+            searchable = f"{entry.get('title', '')} {body}".lower()
+            if any(phrase in searchable for phrase in EXCLUDED_PHRASES):
+                pattern_filtered += 1
+                continue
+            
+            # Tier 1 Focused Keyword Check (bypass length filter)
+            has_tier1 = any(kw in searchable for kw in INTENT_KEYWORDS_FOCUSED) or \
+                        any(kw in searchable for kw in VALUE_KEYWORDS_FOCUSED)
+            
+            # Body length filter
+            if len(body) < MIN_BODY_LENGTH and not has_tier1:
+                length_filtered += 1
+                continue
+            
             fresh.append(entry)
+        else:
+            # Post too old, skip
+            pass
 
     filtered_count = len(entries) - len(fresh)
     if filtered_count > 0:
         print(f"  ⏰ Freshness filter: dropped {filtered_count} posts older than {MAX_POST_AGE_DAYS} days")
+    if length_filtered > 0:
+        print(f"  📝 Body length filter: dropped {length_filtered} posts < {MIN_BODY_LENGTH} chars")
+    if pattern_filtered > 0:
+        print(f"  ⚠️  Anti-pattern filter: dropped {pattern_filtered} low-signal posts")
 
     return fresh
 

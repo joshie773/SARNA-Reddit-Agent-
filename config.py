@@ -16,54 +16,99 @@ TARGET_SUBREDDITS = [
 ]
 
 # =============================================================================
-# POST FILTERING & SCORING
-MAX_POSTS_PER_RUN = 20
+# TIER 1: FOCUSED KEYWORDS (High-Intent, Immediate Problem)
+# Posts with these keywords = store owners with SPECIFIC metric problems RIGHT NOW
+# =============================================================================
+INTENT_KEYWORDS_FOCUSED = [
+    "conversion rate low", "bounce rate high", "cart abandonment",
+    "average order value", "customer lifetime value", "cost per acquisition",
+    "why is my traffic not converting", "not converting", "losing sales",
+    "revenue drop", "ads not working", "roi negative",
+    "wasting money on ads", "traffic dropoff", "churn rate",
+    "repeat customer rate", "product performance", "which products sell",
+    "inventory turnover", "breakeven point", "profit margin",
+]
 
-# Relevance scoring weights (out of 100)
-SCORE_WEIGHT_INTENT = 40
-SCORE_WEIGHT_VALUE = 25
-SCORE_WEIGHT_FRESHNESS = 20
-SCORE_WEIGHT_BODY_LENGTH = 10
-SCORE_WEIGHT_DIVERSITY = 5
+VALUE_KEYWORDS_FOCUSED = [
+    "analyzed my metrics", "data shows", "conversion rate by channel",
+    "customer cohort", "product performance analysis", "attribution model",
+    "funnel analysis", "a/b testing results", "analytics breakdown",
+    "revenue by product", "customer acquisition cost", "lifetime value",
+    "repeat rate", "segment analysis", "benchmark against",
+    "competitive analysis", "traffic source breakdown", "channel performance",
+]
+
+# =============================================================================
+# TIER 2: BROADER KEYWORDS (Still High-Value, Strategy/Optimization Mode)
+# Posts with these = store owners thinking systematically, not just asking how-to questions
+# =============================================================================
+INTENT_KEYWORDS_BROADER = [
+    "scaling strategy", "growth bottleneck", "optimization",
+    "trying to improve", "need to understand", "debugging performance",
+    "store review", "what's wrong with my store", "how can i improve",
+    "audit my", "traffic not converting", "sales struggling",
+    "need growth", "competitive edge", "market position",
+    "pricing strategy", "product mix", "diversify revenue",
+]
+
+VALUE_KEYWORDS_BROADER = [
+    "growth hacking", "case study", "scaled to", "revenue model",
+    "business model", "optimization strategy", "my metrics",
+    "store performance", "customer behavior", "purchase pattern",
+    "repeat purchase", "brand loyalty", "email marketing metrics",
+    "retention strategy", "customer journey", "funnel optimization",
+    "marketing mix",
+]
+
+# Combine into single list for backwards compatibility
+INTENT_KEYWORDS = INTENT_KEYWORDS_FOCUSED + INTENT_KEYWORDS_BROADER
+VALUE_KEYWORDS = VALUE_KEYWORDS_FOCUSED + VALUE_KEYWORDS_BROADER
+
+# =============================================================================
+# SUBREDDIT WEIGHTING (Multiplier applied to final score)
+# Tier 1 = store owner focused, high qualification
+# Tier 2 = founder/strategy focused, mid qualification
+# Tier 3 = noisy/too broad, low qualification
+# Tier 4 = beginners/spam risk, avoid
+# =============================================================================
+SUBREDDIT_WEIGHT = {
+    "shopify": 1.5,           # Tier 1 — all store owners, best ICP
+    "ShopifyAppDev": 1.4,     # Tier 1 — technical founders
+    "shopifyDev": 1.4,        # Tier 1 — technical founders
+    "DTC": 1.3,               # Tier 2 — founder-focused, budget-aware
+    "ecommerce": 1.2,         # Tier 2 — broader audience
+    "smallbusiness": 0.8,     # Tier 3 — too broad
+    "EntrepreneurIndia": 0.7, # Tier 3 — noisy, advice-seeking
+    "IndianStartups": 0.7,    # Tier 3 — too broad
+    "dropship": 0.6,          # Tier 4 — spam risk, avoid
+    "juststart": 0.5,         # Tier 4 — beginners, avoid
+}
+
+# =============================================================================
+# ANTI-PATTERN FILTERING (Removes low-signal posts)
+# =============================================================================
+MIN_BODY_LENGTH = 150  # Minimum characters in post body (filters "quick question" posts)
+
+EXCLUDED_PHRASES = [
+    "just starting", "brand new", "how do i", "what's the best",
+    "beginner here", "no experience", "first time", "completely new",
+    "never done this before",
+]
+
+# =============================================================================
+# SCORING WEIGHTS (Total = 100)
+# =============================================================================
+SCORE_WEIGHT_INTENT = 50      # Up from 40 — prioritize specific problems
+SCORE_WEIGHT_VALUE = 20       # Down from 25 — less emphasis on generic value
+SCORE_WEIGHT_FRESHNESS = 15   # Down from 20 — older specific problems still valuable
+SCORE_WEIGHT_BODY_LENGTH = 10 # Keep same
+SCORE_WEIGHT_DIVERSITY = 5    # Keep same (applied separately in rank_and_select)
+
+# Keep existing ones
 MAX_POST_AGE_DAYS = 7
 PROCESSED_POSTS_FILE = "processed_posts.json"
-PROCESSED_POSTS_MAX = 1000  # Auto-prune older entries
-NOTIFICATION_STATE_FILE = "notification_state.json"
-
-# =============================================================================
-# INTENT KEYWORDS (60% of captures)
-# Posts matching these are explicit problem signals from store owners
-# =============================================================================
-INTENT_KEYWORDS = [
-    "struggling", "help", "not working", "frustrated",
-    "can't figure out", "issues with", "stuck with", "failing",
-    "sucks", "broken", "how do i", "what am i doing wrong",
-    "not converting", "low sales", "traffic drops",
-    "no sales", "losing money", "wasting money", "can't sell",
-    "conversion rate", "bounce rate", "abandoned cart",
-    "ads not working", "seo help", "need advice",
-    "what's wrong", "please help", "any suggestions",
-    "store review", "critique my", "feedback on",
-    "out of stock", "inventory issues", "shipping problems",
-    "payment issues", "checkout problems",
-]
-
-# =============================================================================
-# VALUE KEYWORDS (40% of captures)
-# Posts discussing e-commerce topics where expert insight adds value
-# =============================================================================
-VALUE_KEYWORDS = [
-    "increased conversion", "growth strategy", "scaling",
-    "how i", "my experience", "case study", "data analysis",
-    "optimization", "a]b testing", "analytics",
-    "shopify tips", "ecommerce tips", "store setup",
-    "product page", "landing page", "email marketing",
-    "customer retention", "repeat customers", "brand building",
-    "social media strategy", "content marketing",
-    "pricing strategy", "competitive analysis",
-    "shopify app", "shopify theme", "liquid code",
-    "api integration", "webhook", "metafield",
-]
+PROCESSED_POSTS_MAX = 1000
+MAX_POSTS_PER_RUN = 20
 
 # =============================================================================
 # DUAL-LAYER SUBREDDIT COMPLIANCE (Hardwired — no live API calls)

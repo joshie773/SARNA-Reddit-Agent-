@@ -375,6 +375,7 @@ FALLBACK_TEMPLATES = [
 EMAIL_RECIPIENT = "pranamyajeet@gmail.com"
 EMAIL_SUBJECT_TEMPLATE = "🔍 SARNA — Reddit Opportunities {date} {period}"
 GOOGLE_SHEET_URL_TEMPLATE = "https://docs.google.com/spreadsheets/d/{sheet_id}"
+NOTIFICATION_STATE_FILE = "notification_state.json"
 
 # =============================================================================
 # GOOGLE SHEETS SCHEMA (6 columns, append-only)

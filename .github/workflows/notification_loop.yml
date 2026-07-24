@@ -17,6 +17,10 @@ on:
   # Manual trigger from GitHub Actions UI
   workflow_dispatch:
 
+  # Webhook / External Cron trigger via GitHub REST API
+  repository_dispatch:
+    types: [trigger-notification]
+
 permissions:
   contents: write  # Required for committing notification_state.json
 

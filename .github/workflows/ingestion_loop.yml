@@ -18,6 +18,10 @@ on:
   # Manual trigger from GitHub Actions UI (for testing)
   workflow_dispatch:
 
+  # Webhook / External Cron trigger via GitHub REST API
+  repository_dispatch:
+    types: [trigger-ingestion]
+
 permissions:
   contents: write  # CRITICAL: Required for git push of processed_posts.json
 

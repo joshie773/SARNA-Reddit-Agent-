@@ -11,9 +11,8 @@ name: SARNA Ingestion Loop
 
 on:
   schedule:
-    # Runs at 35 minutes past the UTC hour = 5 minutes past the IST hour (UTC+5:30)
-    # E.g., 1:05 PM IST, 2:05 PM IST, 3:05 PM IST, etc.
-    - cron: '35 * * * *'
+    # Runs every 2 hours at 35 minutes past the UTC hour (e.g. 1:05 PM IST, 3:05 PM IST, etc.)
+    - cron: '35 */2 * * *'
 
   # Manual trigger from GitHub Actions UI (for testing)
   workflow_dispatch:

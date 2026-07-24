@@ -31,8 +31,11 @@ from config import (
     GROQ_MAX_RETRIES,
     BANNED_WORDS,
     SYSTEM_PROMPT_TEMPLATE,
+    SYSTEM_PROMPT_TEMPLATE_AI,
     SUBREDDIT_COMPLIANCE,
     FALLBACK_TEMPLATES,
+    FALLBACK_TEMPLATES_AI,
+    AI_SUBREDDITS,
 )
 
 
@@ -136,7 +139,9 @@ def _build_system_prompt(subreddit: str) -> str:
     layer_1 = compliance.get("layer_1_rules", "No specific rules available. Be helpful and non-promotional.")
     layer_2 = compliance.get("layer_2_culture", "Be casual, knowledgeable, and genuine.")
 
-    return SYSTEM_PROMPT_TEMPLATE.format(
+    template = SYSTEM_PROMPT_TEMPLATE_AI if subreddit in AI_SUBREDDITS else SYSTEM_PROMPT_TEMPLATE
+
+    return template.format(
         subreddit_name=subreddit,
         layer_1_rules=layer_1,
         layer_2_culture=layer_2,
@@ -300,10 +305,15 @@ def generate_with_groq(post: dict) -> dict | None:
 def get_fallback_template(post: dict) -> dict:
     """
     Select a pre-written fallback template.
-    Picks randomly from the template bank.
+    Picks randomly from the template bank based on subreddit type.
     """
-    template = random.choice(FALLBACK_TEMPLATES)
-    print(f"    ↩️  Using fallback template")
+    subreddit = post.get("subreddit", "unknown")
+    if subreddit in AI_SUBREDDITS:
+        template = random.choice(FALLBACK_TEMPLATES_AI)
+    else:
+        template = random.choice(FALLBACK_TEMPLATES)
+        
+    print(f"    ↩️  Using fallback template for r/{subreddit}")
     return {
         "comment": template["comment"],
         "dm": template["dm"],

@@ -87,9 +87,16 @@ def build_row(post: dict, comment: str, dm: str) -> list:
     # Column A: Subreddit
     col_a = f"r/{subreddit}"
 
+    # Wrap URL with Apps Script if available
+    web_app_url = os.environ.get("APPS_SCRIPT_WEB_APP_URL")
+    target_url = url
+    if web_app_url and url:
+        import urllib.parse
+        target_url = f"{web_app_url}?url={urllib.parse.quote(url)}"
+
     # Column B: Post Title as clickable hyperlink
     # Use HYPERLINK formula so it's clickable in Google Sheets
-    col_b = f'=HYPERLINK("{url}", "{title.replace(chr(34), chr(39))}")'
+    col_b = f'=HYPERLINK("{target_url}", "{title.replace(chr(34), chr(39))}")'
 
     # Column C: AI Comment
     col_c = comment

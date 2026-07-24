@@ -112,45 +112,59 @@ def fetch_rss_feed(user_agent: str | None = None) -> list[dict]:
     
     for sub in TARGET_SUBREDDITS:
         url = f"https://www.reddit.com/r/{sub}/new/.rss"
-        try:
-            resp = requests.get(
-                url,
-                headers={"User-Agent": ua},
-                timeout=15,
-            )
-            resp.raise_for_status()
-            feed = feedparser.parse(resp.text)
-            
-            if feed.bozo and not feed.entries:
-                continue
+        
+        for attempt in range(3):
+            try:
+                resp = requests.get(
+                    url,
+                    headers={"User-Agent": ua},
+                    timeout=15,
+                )
                 
-            for entry in feed.entries:
-                post_id = _extract_post_id(entry.get("link", "") or entry.get("id", ""))
-                if not post_id:
+                if resp.status_code == 429:
+                    sleep_time = 5 * (attempt + 1)
+                    print(f"  ⚠️ Rate limited (429) on r/{sub}. Sleeping for {sleep_time}s...")
+                    time.sleep(sleep_time)
                     continue
+                    
+                resp.raise_for_status()
+                feed = feedparser.parse(resp.text)
+                
+                if feed.bozo and not feed.entries:
+                    break
+                    
+                for entry in feed.entries:
+                    post_id = _extract_post_id(entry.get("link", "") or entry.get("id", ""))
+                    if not post_id:
+                        continue
 
-                # Force the subreddit to the one we are fetching, or fallback to extraction
-                subreddit = sub if sub else _extract_subreddit(entry)
+                    # Force the subreddit to the one we are fetching, or fallback to extraction
+                    subreddit = sub if sub else _extract_subreddit(entry)
 
-                raw_body = entry.get("summary", "") or ""
-                body = strip_html(raw_body)
-                published_utc = _parse_published_time(entry)
+                    raw_body = entry.get("summary", "") or ""
+                    body = strip_html(raw_body)
+                    published_utc = _parse_published_time(entry)
 
-                entries.append({
-                    "post_id": post_id,
-                    "title": entry.get("title", "").strip(),
-                    "body": body,
-                    "url": entry.get("link", ""),
-                    "subreddit": subreddit,
-                    "published_utc": published_utc,
-                    "author": _extract_author(entry),
-                })
-        except requests.RequestException:
-            # Skip failed subreddits to keep the pipeline moving
-            pass
+                    entries.append({
+                        "post_id": post_id,
+                        "title": entry.get("title", "").strip(),
+                        "body": body,
+                        "url": entry.get("link", ""),
+                        "subreddit": subreddit,
+                        "published_utc": published_utc,
+                        "author": _extract_author(entry),
+                    })
+                    
+                # Success! Break out of the retry loop
+                break
+                
+            except requests.RequestException as e:
+                # Skip failed subreddits on other network errors
+                print(f"  ❌ Error fetching r/{sub}: {e}")
+                break
             
-        # Respect Reddit's rate limit for unauthenticated RSS (avoid 429 errors)
-        time.sleep(1.5)
+        # Generous base sleep to respect Reddit's unauthenticated limits
+        time.sleep(2.5)
 
     print(f"  📥 Parsed {len(entries)} total entries across all RSS feeds")
     print(f"  ✅ Scanned all {len(TARGET_SUBREDDITS)} subreddits in this run")

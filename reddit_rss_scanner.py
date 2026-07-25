@@ -97,35 +97,38 @@ def save_processed_posts(post_ids: set):
 # =============================================================================
 def fetch_rss_feed(user_agent: str | None = None) -> list[dict]:
     """
-    Fetch and parse RSS feeds for each subreddit individually.
-
-    Returns a list of raw entry dicts with extracted fields:
-    - post_id, title, body, url, subreddit, published_utc
+    Fetch and parse RSS feeds in batches to avoid 429 Rate Limits.
     """
     ua = user_agent or os.environ.get(
         "REDDIT_USER_AGENT",
         "python:sarna_monitor:v4.0 (by /u/sarna_bot)",
     )
 
-    print(f"  📡 Fetching RSS from {len(TARGET_SUBREDDITS)} subreddits individually...")
+    print(f"  📡 Fetching RSS from {len(TARGET_SUBREDDITS)} subreddits in batches...")
 
     entries = []
+    target_subs_lower = {s.lower(): s for s in TARGET_SUBREDDITS}
     
-    for sub in TARGET_SUBREDDITS:
-        url = f"https://www.reddit.com/r/{sub}/new/.rss"
+    # Break into batches of 5 subreddits to reduce requests
+    batch_size = 5
+    batches = [TARGET_SUBREDDITS[i:i + batch_size] for i in range(0, len(TARGET_SUBREDDITS), batch_size)]
+    
+    for batch in batches:
+        grouped_subs = "+".join(batch)
+        url = f"https://www.reddit.com/r/{grouped_subs}/new/.rss?limit=100"
         
-        for attempt in range(3):
+        for attempt in range(4):
             try:
                 resp = requests.get(
                     url,
                     headers={"User-Agent": ua},
-                    timeout=15,
+                    timeout=20,
                 )
                 
                 if resp.status_code == 429:
-                    sleep_time = 5 * (attempt + 1)
-                    print(f"  ⚠️ Rate limited (429) on r/{sub}. Sleeping for {sleep_time}s...")
-                    time.sleep(sleep_time)
+                    retry_after = int(resp.headers.get("Retry-After", 30 * (attempt + 1)))
+                    print(f"  ⚠️ Rate limited (429) on batch {batch[0]}... Sleeping for {retry_after}s...")
+                    time.sleep(retry_after)
                     continue
                     
                 resp.raise_for_status()
@@ -139,8 +142,9 @@ def fetch_rss_feed(user_agent: str | None = None) -> list[dict]:
                     if not post_id:
                         continue
 
-                    # Force the subreddit to the one we are fetching, or fallback to extraction
-                    subreddit = sub if sub else _extract_subreddit(entry)
+                    # Extract subreddit and normalize casing
+                    raw_sub = _extract_subreddit(entry)
+                    subreddit = target_subs_lower.get(raw_sub.lower(), raw_sub)
 
                     raw_body = entry.get("summary", "") or ""
                     body = strip_html(raw_body)
@@ -160,12 +164,12 @@ def fetch_rss_feed(user_agent: str | None = None) -> list[dict]:
                 break
                 
             except requests.RequestException as e:
-                # Skip failed subreddits on other network errors
-                print(f"  ❌ Error fetching r/{sub}: {e}")
+                # Skip failed batch on other network errors
+                print(f"  ❌ Error fetching batch starting with r/{batch[0]}: {e}")
                 break
             
         # Generous base sleep to respect Reddit's unauthenticated limits
-        time.sleep(2.5)
+        time.sleep(10.0)
 
     print(f"  📥 Parsed {len(entries)} total entries across all RSS feeds")
     print(f"  ✅ Scanned all {len(TARGET_SUBREDDITS)} subreddits in this run")

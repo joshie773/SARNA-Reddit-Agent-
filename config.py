@@ -112,7 +112,26 @@ SUBREDDIT_WEIGHT = {
 }
 
 # =============================================================================
-# ANTI-PATTERN FILTERING (Removes low-signal posts)
+# =============================================================================
+# COMMERCIAL & BUSINESS SIGNALS vs HOBBYIST ANTI-PATTERNS
+# =============================================================================
+COMMERCIAL_KEYWORDS = [
+    "store", "client", "customer", "sales", "revenue", "order", "orders",
+    "agency", "lead", "leads", "crm", "team", "business", "hiring",
+    "invoice", "invoices", "support ticket", "inbox", "checkout",
+    "conversion rate", "mrr", "arr", "b2b", "saas", "fulfillment", "brand",
+    "client work", "our clients", "my client", "operating a business", "e-commerce"
+]
+
+HOBBYIST_EXCLUDED_PHRASES = [
+    "for personal use", "hobby project", "for fun", "just learning",
+    "student project", "college project", "school project",
+    "my macbook", "gaming pc", "home lab", "homelab", "my local pc",
+    "personal project", "learning python", "for my own use"
+]
+
+# =============================================================================
+# ANTI-PATTERN FILTERING (Removes low-signal & hobbyist posts)
 # =============================================================================
 MIN_BODY_LENGTH = 0  # Set to 0 to disable minimum body character length filter
 
@@ -126,16 +145,16 @@ EXCLUDED_PHRASES = [
     "best e-commerce site", "cheaper alternative", "scam", "report fake", 
     "how to report", "which platform", "is shopify worth it", "ban", 
     "suspended", "alternative to shopify", "best e-commerce system"
-]
+] + HOBBYIST_EXCLUDED_PHRASES
 
 # =============================================================================
-# SCORING WEIGHTS (Total = 100)
+# SCORING WEIGHTS (100% Intent & Commercial Focus — Total = 100)
 # =============================================================================
-SCORE_WEIGHT_INTENT = 50      # Up from 40 — prioritize specific problems
-SCORE_WEIGHT_VALUE = 20       # Down from 25 — less emphasis on generic value
-SCORE_WEIGHT_FRESHNESS = 15   # Down from 20 — older specific problems still valuable
-SCORE_WEIGHT_BODY_LENGTH = 10 # Keep same
-SCORE_WEIGHT_DIVERSITY = 5    # Keep same (applied separately in rank_and_select)
+SCORE_WEIGHT_INTENT = 60      # Primary weight on explicit problem/intent hits
+SCORE_WEIGHT_COMMERCIAL = 30  # Weight on active business/commercial context
+SCORE_WEIGHT_VALUE = 0        # Value words alone give 0 base score (must have intent)
+SCORE_WEIGHT_FRESHNESS = 15   # Freshness decay over 7 days
+SCORE_WEIGHT_BODY_LENGTH = 5  # Minor bonus for body detail
 
 MAX_POST_AGE_DAYS = 7
 PROCESSED_POSTS_FILE = "processed_posts.json"

@@ -24,15 +24,16 @@ from config import (
     VALUE_KEYWORDS_FOCUSED,
     INTENT_KEYWORDS_BROADER,
     VALUE_KEYWORDS_BROADER,
+    COMMERCIAL_KEYWORDS,
     MAX_POSTS_PER_RUN,
     MAX_POST_AGE_DAYS,
     PROCESSED_POSTS_FILE,
     PROCESSED_POSTS_MAX,
     SCORE_WEIGHT_INTENT,
+    SCORE_WEIGHT_COMMERCIAL,
     SCORE_WEIGHT_VALUE,
     SCORE_WEIGHT_FRESHNESS,
     SCORE_WEIGHT_BODY_LENGTH,
-    SCORE_WEIGHT_DIVERSITY,
     SUBREDDIT_WEIGHT,
     MIN_BODY_LENGTH,
     EXCLUDED_PHRASES,
@@ -221,12 +222,13 @@ def _parse_published_time(entry) -> datetime | None:
 
 
 # =============================================================================
+# =============================================================================
 # Keyword tagging & Scoring
 # =============================================================================
 def tag_by_keywords(entries: list[dict]) -> list[dict]:
     """
-    Tag posts with keyword match scores and tier classification.
-    Returns all posts that have at least one intent or value keyword hit.
+    Tag posts with keyword match scores, commercial context, and tier classification.
+    REQUIREMENT: Post MUST have at least one intent keyword hit (intent_score > 0).
     
     Tier 1: Matched FOCUSED keywords (high-intent specific problems)
     Tier 2: Matched BROADER keywords (strategy/optimization)
@@ -238,96 +240,85 @@ def tag_by_keywords(entries: list[dict]) -> list[dict]:
     for entry in entries:
         searchable = f"{entry['title']} {entry['body']}".lower()
 
-        # Check focused keywords
+        # Check focused & broader intent keywords
         focused_intent = sum(1 for kw in INTENT_KEYWORDS_FOCUSED if kw in searchable)
-        focused_value = sum(1 for kw in VALUE_KEYWORDS_FOCUSED if kw in searchable)
-        
-        # Check broader keywords (only if no focused match)
         broader_intent = sum(1 for kw in INTENT_KEYWORDS_BROADER if kw in searchable) if focused_intent == 0 else 0
-        broader_value = sum(1 for kw in VALUE_KEYWORDS_BROADER if kw in searchable) if focused_value == 0 else 0
-
         intent_score = focused_intent + broader_intent
+
+        # 100% INTENT REQUIREMENT: Must have active problem/intent match
+        if intent_score == 0:
+            continue
+
+        # Check value & commercial signals
+        focused_value = sum(1 for kw in VALUE_KEYWORDS_FOCUSED if kw in searchable)
+        broader_value = sum(1 for kw in VALUE_KEYWORDS_BROADER if kw in searchable) if focused_value == 0 else 0
         value_score = focused_value + broader_value
+        
+        commercial_score = sum(1 for kw in COMMERCIAL_KEYWORDS if kw in searchable)
 
-        if intent_score > 0 or value_score > 0:
-            entry["intent_score"] = intent_score
-            entry["value_score"] = value_score
-            
-            # Classify tier
-            if focused_intent > 0 or focused_value > 0:
-                entry["keyword_tier"] = "tier_1_focused"
-                tier_1_count += 1
-            else:
-                entry["keyword_tier"] = "tier_2_broader"
-                tier_2_count += 1
-            
-            if intent_score > 0:
-                entry["match_type"] = "intent"
-            else:
-                entry["match_type"] = "value"
-            
-            tagged.append(entry)
+        entry["intent_score"] = intent_score
+        entry["value_score"] = value_score
+        entry["commercial_score"] = commercial_score
+        entry["match_type"] = "intent"
+        
+        # Classify tier
+        if focused_intent > 0 or focused_value > 0:
+            entry["keyword_tier"] = "tier_1_focused"
+            tier_1_count += 1
+        else:
+            entry["keyword_tier"] = "tier_2_broader"
+            tier_2_count += 1
+        
+        tagged.append(entry)
 
-    print(f"  🎯 Keyword tagging: {len(tagged)} posts with hits (Tier 1: {tier_1_count}, Tier 2: {tier_2_count})")
+    print(f"  🎯 Intent & Commercial tagging: {len(tagged)} qualified problem posts (Tier 1: {tier_1_count}, Tier 2: {tier_2_count})")
     return tagged
 
 
 def score_post(post: dict) -> float:
-    """Calculate the base relevance score (out of 95, 5 reserved for diversity)."""
-    intent_pts = min(post.get("intent_score", 0) * 10, SCORE_WEIGHT_INTENT)
-    value_pts = min(post.get("value_score", 0) * 8, SCORE_WEIGHT_VALUE)
+    """Calculate the base relevance score based on Intent + Commercial Context."""
+    intent_pts = min(post.get("intent_score", 0) * 15, SCORE_WEIGHT_INTENT)
+    commercial_pts = min(post.get("commercial_score", 0) * 10, SCORE_WEIGHT_COMMERCIAL)
+    value_pts = min(post.get("value_score", 0) * 0, SCORE_WEIGHT_VALUE)  # 0 pts for value alone
     
     # Freshness (linear decay over MAX_POST_AGE_DAYS)
     age_hours = post.get("age_hours", 0)
     max_age_hours = MAX_POST_AGE_DAYS * 24
     freshness_pts = max(0, SCORE_WEIGHT_FRESHNESS * (1 - (age_hours / max_age_hours)))
     
-    # Body length (already filtered, but still score)
+    # Body length bonus
     body_len = len(post.get("body", ""))
     length_pts = min(body_len / 200.0, SCORE_WEIGHT_BODY_LENGTH)
     
-    base_score = intent_pts + value_pts + freshness_pts + length_pts
+    base_score = intent_pts + commercial_pts + value_pts + freshness_pts + length_pts
     return base_score
 
 
-def rank_and_select(posts: list[dict], max_posts: int = 10) -> list[dict]:
+def rank_and_select(posts: list[dict], max_posts: int = 20) -> list[dict]:
     """
-    Apply weight to BASE SCORE only (not diversity bonus).
-    This makes subreddit preference a quality filter, not a score multiplier.
+    Apply subreddit quality weighting to BASE SCORE without diversity bonus.
+    Pure merit & quality ranking.
     """
     for p in posts:
         p["base_score"] = score_post(p)
         
-    posts.sort(key=lambda x: x["base_score"], reverse=True)
-    
     subreddit_counts = {}
     for p in posts:
         sub = p["subreddit"]
-        count = subreddit_counts.get(sub, 0)
+        subreddit_counts[sub] = subreddit_counts.get(sub, 0) + 1
         
-        # Diversity bonus
-        bonus = 0
-        if count == 0:
-            bonus = 20
-        elif count == 1:
-            bonus = 15
-        elif count == 2:
-            bonus = 10
-            
-        subreddit_counts[sub] = count + 1
-        
-        # Apply weight to BASE SCORE only, then add bonus
+        # Apply subreddit priority multiplier directly (No diversity bonus)
         subreddit_weight = SUBREDDIT_WEIGHT.get(sub, 1.0)
         weighted_base = p["base_score"] * subreddit_weight
-        total_score = min(100.0, weighted_base + bonus)
+        total_score = min(100.0, weighted_base)
         
         p["total_score"] = round(total_score, 1)
         
         intent = p.get('intent_score', 0)
-        val = p.get('value_score', 0)
+        comm = p.get('commercial_score', 0)
         age = p.get('age_hours', 0)
         tier = p.get('keyword_tier', 'unknown')
-        p["relevance_string"] = f"{p['total_score']}/100 [{tier}] — {intent} intent, {val} value, {int(age)}h old"
+        p["relevance_string"] = f"{p['total_score']}/100 [{tier}] — {intent} intent, {comm} commercial, {int(age)}h old"
 
     posts.sort(key=lambda x: x["total_score"], reverse=True)
     

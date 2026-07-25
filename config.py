@@ -114,7 +114,7 @@ SUBREDDIT_WEIGHT = {
 # =============================================================================
 # ANTI-PATTERN FILTERING (Removes low-signal posts)
 # =============================================================================
-MIN_BODY_LENGTH = 150  # Minimum characters in post body (filters "quick question" posts)
+MIN_BODY_LENGTH = 0  # Set to 0 to disable minimum body character length filter
 
 EXCLUDED_PHRASES = [
     "just starting", "brand new", "how do i start", "what's the best",

@@ -1,7 +1,7 @@
 # =============================================================================
 # SARNA v4.0 — Ingestion Loop
 # =============================================================================
-# Runs every 60 minutes to capture Reddit posts before RSS buffer flushes.
+# Runs every 2 hours to capture Reddit posts before RSS buffer flushes.
 # Pipeline: RSS fetch → keyword filter → Gemini comment gen → Google Sheets
 #
 # Monthly usage: ~720 runs × ~1 min avg = ~720 of 2,000 free minutes

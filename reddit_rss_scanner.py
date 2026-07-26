@@ -377,7 +377,7 @@ def score_post(post: dict) -> float:
     raw_intent = post.get("intent_score", 0)
     intent_pts = (raw_intent / 100.0) * SCORE_WEIGHT_INTENT
     
-    commercial_pts = min(post.get("commercial_score", 0) * 10, SCORE_WEIGHT_COMMERCIAL)
+    commercial_pts = min(post.get("commercial_score", 0) * 5, SCORE_WEIGHT_COMMERCIAL)
     
     # Freshness (linear decay over MAX_POST_AGE_DAYS)
     age_hours = post.get("age_hours", 0)

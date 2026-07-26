@@ -49,25 +49,25 @@ VALUE_REGEXES = [
 # =============================================================================
 SUBREDDIT_WEIGHT = {
     # AI/Automation Tier 1
-    "Automation": 1.5,
-    "AI_Agents": 1.5,
-    "zapier": 1.5,
-    "n8n": 1.4,
-    "LocalLLaMA": 1.3,
+    "Automation": 1.1,
+    "AI_Agents": 1.1,
+    "zapier": 1.1,
+    "n8n": 1.0,
+    "LocalLLaMA": 0.9,
     
     # E-commerce Tier
-    "shopify": 1.4,
-    "DTC": 1.3,
-    "ecommerce": 1.2,
-    "ShopifyAppDev": 1.2,
-    "shopifyDev": 1.2,
+    "shopify": 1.1,
+    "DTC": 1.0,
+    "ecommerce": 1.0,
+    "ShopifyAppDev": 1.0,
+    "shopifyDev": 1.0,
     
     # Lower value
     "smallbusiness": 0.8,
     "EntrepreneurIndia": 0.7,
     "IndianStartups": 0.7,
     "dropship": 0.6,
-    "juststart": 0.5,
+    "juststart": 0.6,
 }
 
 # =============================================================================
@@ -110,10 +110,10 @@ EXCLUDED_PHRASES = [
 # =============================================================================
 # SCORING WEIGHTS (100% Intent & Commercial Focus — Total = 100)
 # =============================================================================
-SCORE_WEIGHT_INTENT = 60      # Primary weight on explicit problem/intent hits
-SCORE_WEIGHT_COMMERCIAL = 30  # Weight on active business/commercial context
-SCORE_WEIGHT_VALUE = 0        # Value words alone give 0 base score (must have intent)
-SCORE_WEIGHT_FRESHNESS = 15   # Freshness decay over 7 days
+SCORE_WEIGHT_INTENT = 70      # Groq dictates the vast majority of the score
+SCORE_WEIGHT_COMMERCIAL = 15  # Max 15 pts (5 pts per explicit commercial keyword)
+SCORE_WEIGHT_VALUE = 0        # Value words alone give 0 base score
+SCORE_WEIGHT_FRESHNESS = 10   # Freshness decay over 7 days
 SCORE_WEIGHT_BODY_LENGTH = 5  # Minor bonus for body detail
 
 MAX_POST_AGE_DAYS = 7

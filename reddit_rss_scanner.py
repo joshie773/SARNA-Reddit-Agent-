@@ -20,10 +20,8 @@ import requests
 
 from config import (
     TARGET_SUBREDDITS,
-    INTENT_KEYWORDS_FOCUSED,
-    VALUE_KEYWORDS_FOCUSED,
-    INTENT_KEYWORDS_BROADER,
-    VALUE_KEYWORDS_BROADER,
+    INTENT_REGEXES,
+    VALUE_REGEXES,
     COMMERCIAL_KEYWORDS,
     MAX_POSTS_PER_RUN,
     MAX_POST_AGE_DAYS,
@@ -37,6 +35,9 @@ from config import (
     SUBREDDIT_WEIGHT,
     MIN_BODY_LENGTH,
     EXCLUDED_PHRASES,
+    GROQ_MODEL,
+    GROQ_API_BASE,
+    GROQ_TRIAGE_PROMPT_TEMPLATE
 )
 
 
@@ -97,11 +98,15 @@ def save_processed_posts(post_ids: set):
 # =============================================================================
 def fetch_rss_feed(user_agent: str | None = None) -> list[dict]:
     """
-    Fetch and parse RSS feeds in batches to avoid 429 Rate Limits.
+    Fetch and parse RSS feeds in batches with robust 429 Rate Limit protection,
+    dynamic User-Agents, request jitter, and automatic .json fallback.
     """
+    import random
+    
+    # Dynamic User-Agent with timestamp to avoid static-string blocks
     ua = user_agent or os.environ.get(
         "REDDIT_USER_AGENT",
-        "python:sarna_monitor:v4.0 (by /u/sarna_bot)",
+        f"python:sarna_monitor_v4:v4.0.{int(time.time())} (by /u/sarna_bot)",
     )
 
     print(f"  📡 Fetching RSS from {len(TARGET_SUBREDDITS)} subreddits in batches...")
@@ -115,63 +120,95 @@ def fetch_rss_feed(user_agent: str | None = None) -> list[dict]:
     
     for batch in batches:
         grouped_subs = "+".join(batch)
-        url = f"https://www.reddit.com/r/{grouped_subs}/new/.rss?limit=100"
+        urls = [
+            f"https://www.reddit.com/r/{grouped_subs}/new/.rss?limit=100",
+            f"https://www.reddit.com/r/{grouped_subs}/new.json?limit=100" # Fallback JSON endpoint
+        ]
         
-        for attempt in range(4):
-            try:
-                resp = requests.get(
-                    url,
-                    headers={"User-Agent": ua},
-                    timeout=20,
-                )
+        success = False
+        for endpoint_url in urls:
+            if success:
+                break
                 
-                if resp.status_code == 429:
-                    retry_after = int(resp.headers.get("Retry-After", 30 * (attempt + 1)))
-                    print(f"  ⚠️ Rate limited (429) on batch {batch[0]}... Sleeping for {retry_after}s...")
-                    time.sleep(retry_after)
-                    continue
+            for attempt in range(2):
+                try:
+                    resp = requests.get(
+                        endpoint_url,
+                        headers={"User-Agent": ua},
+                        timeout=20,
+                    )
                     
-                resp.raise_for_status()
-                feed = feedparser.parse(resp.text)
-                
-                if feed.bozo and not feed.entries:
+                    if resp.status_code == 429:
+                        retry_after = int(resp.headers.get("Retry-After", 15 * (attempt + 1)))
+                        jitter = random.uniform(2.0, 7.0)
+                        sleep_time = retry_after + jitter
+                        print(f"  ⚠️ Rate limited (429) on endpoint... Sleeping for {sleep_time:.1f}s...")
+                        time.sleep(sleep_time)
+                        continue
+                        
+                    resp.raise_for_status()
+                    
+                    # Parse based on endpoint type
+                    if ".json" in endpoint_url:
+                        data = resp.json()
+                        children = data.get("data", {}).get("children", [])
+                        for child in children:
+                            post_data = child.get("data", {})
+                            post_id = post_data.get("id")
+                            if not post_id:
+                                continue
+                            
+                            raw_sub = post_data.get("subreddit", "unknown")
+                            subreddit = target_subs_lower.get(raw_sub.lower(), raw_sub)
+                            
+                            entries.append({
+                                "post_id": post_id,
+                                "title": post_data.get("title", "").strip(),
+                                "body": strip_html(post_data.get("selftext", "")),
+                                "url": f"https://reddit.com{post_data.get('permalink', '')}",
+                                "subreddit": subreddit,
+                                "published_utc": datetime.fromtimestamp(post_data.get("created_utc", 0), tz=timezone.utc),
+                                "author": post_data.get("author", "unknown"),
+                            })
+                    else:
+                        feed = feedparser.parse(resp.text)
+                        
+                        if feed.bozo and not feed.entries:
+                            break
+                            
+                        for entry in feed.entries:
+                            post_id = _extract_post_id(entry.get("link", "") or entry.get("id", ""))
+                            if not post_id:
+                                continue
+
+                            raw_sub = _extract_subreddit(entry)
+                            subreddit = target_subs_lower.get(raw_sub.lower(), raw_sub)
+
+                            raw_body = entry.get("summary", "") or ""
+                            body = strip_html(raw_body)
+                            published_utc = _parse_published_time(entry)
+
+                            entries.append({
+                                "post_id": post_id,
+                                "title": entry.get("title", "").strip(),
+                                "body": body,
+                                "url": entry.get("link", ""),
+                                "subreddit": subreddit,
+                                "published_utc": published_utc,
+                                "author": _extract_author(entry),
+                            })
+                            
+                    success = True
                     break
                     
-                for entry in feed.entries:
-                    post_id = _extract_post_id(entry.get("link", "") or entry.get("id", ""))
-                    if not post_id:
-                        continue
-
-                    # Extract subreddit and normalize casing
-                    raw_sub = _extract_subreddit(entry)
-                    subreddit = target_subs_lower.get(raw_sub.lower(), raw_sub)
-
-                    raw_body = entry.get("summary", "") or ""
-                    body = strip_html(raw_body)
-                    published_utc = _parse_published_time(entry)
-
-                    entries.append({
-                        "post_id": post_id,
-                        "title": entry.get("title", "").strip(),
-                        "body": body,
-                        "url": entry.get("link", ""),
-                        "subreddit": subreddit,
-                        "published_utc": published_utc,
-                        "author": _extract_author(entry),
-                    })
-                    
-                # Success! Break out of the retry loop
-                break
-                
-            except requests.RequestException as e:
-                # Skip failed batch on other network errors
-                print(f"  ❌ Error fetching batch starting with r/{batch[0]}: {e}")
-                break
+                except requests.RequestException as e:
+                    print(f"  ❌ Error fetching {endpoint_url}: {e}")
+                    break
             
-        # Generous base sleep to respect Reddit's unauthenticated limits
-        time.sleep(10.0)
+        # Generous base sleep to respect Reddit's unauthenticated limits (with jitter)
+        time.sleep(10.0 + random.uniform(1.1, 5.5))
 
-    print(f"  📥 Parsed {len(entries)} total entries across all RSS feeds")
+    print(f"  📥 Parsed {len(entries)} total entries across all endpoints")
     print(f"  ✅ Scanned all {len(TARGET_SUBREDDITS)} subreddits in this run")
     return entries
 
@@ -229,61 +266,118 @@ def _parse_published_time(entry) -> datetime | None:
 # =============================================================================
 # Keyword tagging & Scoring
 # =============================================================================
-def tag_by_keywords(entries: list[dict]) -> list[dict]:
+def stage1_regex_fuzzy_filter(entries: list[dict]) -> list[dict]:
     """
-    Tag posts with keyword match scores, commercial context, and tier classification.
-    REQUIREMENT: Post MUST have at least one intent keyword hit (intent_score > 0).
-    
-    Tier 1: Matched FOCUSED keywords (high-intent specific problems)
-    Tier 2: Matched BROADER keywords (strategy/optimization)
+    Stage 1: Broad Regex Net to catch obvious problems.
+    Filters out noise and ensures we only send promising posts to Groq.
     """
     tagged = []
-    tier_1_count = 0
-    tier_2_count = 0
-
+    
     for entry in entries:
         searchable = f"{entry['title']} {entry['body']}".lower()
-
-        # Check focused & broader intent keywords
-        focused_intent = sum(1 for kw in INTENT_KEYWORDS_FOCUSED if kw in searchable)
-        broader_intent = sum(1 for kw in INTENT_KEYWORDS_BROADER if kw in searchable) if focused_intent == 0 else 0
-        intent_score = focused_intent + broader_intent
-
-        # 100% INTENT REQUIREMENT: Must have active problem/intent match
-        if intent_score == 0:
+        
+        # Check against Regex patterns
+        intent_hits = sum(1 for pattern in INTENT_REGEXES if re.search(pattern, searchable))
+        value_hits = sum(1 for pattern in VALUE_REGEXES if re.search(pattern, searchable))
+        
+        if intent_hits == 0 and value_hits == 0:
             continue
-
-        # Check value & commercial signals
-        focused_value = sum(1 for kw in VALUE_KEYWORDS_FOCUSED if kw in searchable)
-        broader_value = sum(1 for kw in VALUE_KEYWORDS_BROADER if kw in searchable) if focused_value == 0 else 0
-        value_score = focused_value + broader_value
+            
+        commercial_hits = sum(1 for kw in COMMERCIAL_KEYWORDS if kw in searchable)
         
-        commercial_score = sum(1 for kw in COMMERCIAL_KEYWORDS if kw in searchable)
-
-        entry["intent_score"] = intent_score
-        entry["value_score"] = value_score
-        entry["commercial_score"] = commercial_score
-        entry["match_type"] = "intent"
-        
-        # Classify tier
-        if focused_intent > 0 or focused_value > 0:
-            entry["keyword_tier"] = "tier_1_focused"
-            tier_1_count += 1
-        else:
-            entry["keyword_tier"] = "tier_2_broader"
-            tier_2_count += 1
+        entry["regex_intent_hits"] = intent_hits
+        entry["regex_value_hits"] = value_hits
+        entry["commercial_score"] = commercial_hits  # Base commercial score from keywords
+        entry["match_type"] = "stage1_regex"
+        entry["keyword_tier"] = "regex_pass"
         
         tagged.append(entry)
-
-    print(f"  🎯 Intent & Commercial tagging: {len(tagged)} qualified problem posts (Tier 1: {tier_1_count}, Tier 2: {tier_2_count})")
+        
+    print(f"  🎯 Stage 1 Regex Filter: {len(tagged)} posts passed to Stage 2")
     return tagged
+
+
+def stage2_groq_triage(entries: list[dict]) -> list[dict]:
+    """
+    Stage 2: Strict B2B Triage using Groq LLM.
+    Scores posts based on commercial context and explicit business problems.
+    """
+    api_key = os.environ.get("GROQ_API_KEY")
+    if not api_key:
+        print("  ⚠️  GROQ_API_KEY not set. Falling back to Stage 1 scores.")
+        for e in entries:
+            e["intent_score"] = e.get("regex_intent_hits", 0) * 20
+        return entries
+        
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    
+    scored_entries = []
+    
+    for entry in entries:
+        title = entry.get("title", "")
+        body = entry.get("body", "")[:800] # Cap to save tokens
+        
+        user_prompt = f"POST TITLE: {title}\n\nPOST BODY: {body}\n\nScore this post."
+        
+        payload = {
+            "model": GROQ_MODEL,
+            "messages": [
+                {"role": "system", "content": GROQ_TRIAGE_PROMPT_TEMPLATE},
+                {"role": "user", "content": user_prompt}
+            ],
+            "temperature": 0.0
+        }
+        
+        try:
+            resp = requests.post(GROQ_API_BASE, json=payload, headers=headers, timeout=15)
+            if resp.status_code == 429:
+                print("  ⚠️ Groq rate limited during Stage 2. Returning current scored entries.")
+                break
+            resp.raise_for_status()
+            
+            raw_text = resp.json()["choices"][0]["message"]["content"].strip()
+            raw_text = re.sub(r"^```(?:json)?\s*", "", raw_text)
+            raw_text = re.sub(r"\s*```$", "", raw_text).strip()
+            
+            try:
+                data = json.loads(raw_text)
+            except json.JSONDecodeError:
+                # Try finding json block
+                match = re.search(r"\{[^{}]*\}", raw_text, re.DOTALL)
+                if match:
+                    try:
+                        data = json.loads(match.group(0))
+                    except:
+                        data = {"intent_score": 0, "reason": "Parse failed"}
+                else:
+                    data = {"intent_score": 0, "reason": "Parse failed"}
+                
+            intent_score = data.get("intent_score", 0)
+            
+            if intent_score > 0:
+                entry["intent_score"] = intent_score
+                entry["groq_reason"] = data.get("reason", "")
+                scored_entries.append(entry)
+                
+            time.sleep(1.0) # Prevent Groq TPM/RPM limit bursts
+            
+        except Exception as e:
+            print(f"  ❌ Groq Triage Error: {e}")
+            
+    print(f"  🧠 Stage 2 Groq Triage: {len(scored_entries)} posts qualified as B2B leads")
+    return scored_entries
 
 
 def score_post(post: dict) -> float:
     """Calculate the base relevance score based on Intent + Commercial Context."""
-    intent_pts = min(post.get("intent_score", 0) * 15, SCORE_WEIGHT_INTENT)
+    # Groq gives an intent_score from 0-100
+    raw_intent = post.get("intent_score", 0)
+    intent_pts = (raw_intent / 100.0) * SCORE_WEIGHT_INTENT
+    
     commercial_pts = min(post.get("commercial_score", 0) * 10, SCORE_WEIGHT_COMMERCIAL)
-    value_pts = min(post.get("value_score", 0) * 0, SCORE_WEIGHT_VALUE)  # 0 pts for value alone
     
     # Freshness (linear decay over MAX_POST_AGE_DAYS)
     age_hours = post.get("age_hours", 0)
@@ -294,7 +388,7 @@ def score_post(post: dict) -> float:
     body_len = len(post.get("body", ""))
     length_pts = min(body_len / 200.0, SCORE_WEIGHT_BODY_LENGTH)
     
-    base_score = intent_pts + commercial_pts + value_pts + freshness_pts + length_pts
+    base_score = intent_pts + commercial_pts + freshness_pts + length_pts
     return base_score
 
 
@@ -367,12 +461,12 @@ def filter_by_freshness(entries: list[dict]) -> list[dict]:
                 pattern_filtered += 1
                 continue
             
-            # Tier 1 Focused Keyword Check (bypass length filter)
-            has_tier1 = any(kw in searchable for kw in INTENT_KEYWORDS_FOCUSED) or \
-                        any(kw in searchable for kw in VALUE_KEYWORDS_FOCUSED)
+            # Stage 1 Regex Check (bypass length filter if match)
+            has_regex = any(re.search(pat, searchable) for pat in INTENT_REGEXES) or \
+                        any(re.search(pat, searchable) for pat in VALUE_REGEXES)
             
             # Body length filter
-            if len(body) < MIN_BODY_LENGTH and not has_tier1:
+            if len(body) < MIN_BODY_LENGTH and not has_regex:
                 length_filtered += 1
                 continue
             
@@ -438,11 +532,17 @@ def scan_reddit() -> tuple[list[dict], set]:
         print("  😴 All entries already processed. No new posts this run.")
         return [], processed_ids
 
-    # Step 4: Tag by keywords
-    tagged = tag_by_keywords(new_entries)
+    # Step 4: Stage 1 Regex / Fuzzy Net
+    stage1_passed = stage1_regex_fuzzy_filter(new_entries)
+    if not stage1_passed:
+        print("  😴 No entries passed Stage 1 Regex Filter.")
+        return [], processed_ids
+        
+    # Step 5: Stage 2 Groq B2B Triage
+    stage2_passed = stage2_groq_triage(stage1_passed)
 
-    # Step 5: Rank and select
-    qualified = rank_and_select(tagged, max_posts=MAX_POSTS_PER_RUN)
+    # Step 6: Rank and select
+    qualified = rank_and_select(stage2_passed, max_posts=MAX_POSTS_PER_RUN)
 
     # Update ledger with new post IDs
     new_ids = {e["post_id"] for e in qualified}

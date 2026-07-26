@@ -21,69 +21,28 @@ AI_SUBREDDITS = [
 ]
 
 # =============================================================================
-# TIER 1: FOCUSED KEYWORDS (High-Intent, Immediate Problem)
+# TIER 1: STAGE 1 REGEX PATTERNS (BROAD NET)
 # =============================================================================
-INTENT_KEYWORDS_FOCUSED = [
-    # E-commerce Metrics
-    "conversion rate", "bounce rate", "cart abandonment", "abandoned cart",
-    "average order value", "customer lifetime value", "cost per acquisition",
-    "not converting", "no sales", "zero sales", "losing sales", "drop in sales",
-    "sales dropped", "revenue drop", "ads not working", "roi negative", "bad roas",
-    "wasting money", "traffic dropoff", "churn rate", "high cpa", "low roas",
-    "repeat customer", "product performance", "inventory turnover", 
-    "profit margin", "traffic but no sales", "why am i not getting sales", "getting traffic but",
-    "sales have stopped",
+# These regexes catch broad E-commerce and AI automation pain points.
+INTENT_REGEXES = [
+    # E-commerce pain points (sales, conversions, traffic)
+    r"(drop|tank|declin|down|losing|bad|negative|low|zero|no|stop|inconsistent|struggling).*(sales|revenue|conversion|traffic|roas|cpa|margin|profit|order|checkout)",
+    r"(why am i not|sales have stopped|not converting|wasting money|traffic dropoff)",
+    r"(audit my|what's wrong with my store|decrease in sales)",
     
-    # E-commerce Operations & Automation Needs
-    "inventory mismatch", "customer support volume", "too many emails", 
-    "manual fulfillment", "order processing", "sync inventory", "refund requests", 
-    "wasting time on", "repetitive tasks", "manual data entry",
+    # Operations & Automation pain points
+    r"(inventory mismatch|customer support volume|too many emails|manual fulfillment|sync inventory|refund requests)",
+    r"(wasting time|repetitive|manual data entry|too much manual)",
     
-    # AI / Automation Specific Needs
-    "how to automate", "need a chatbot", "ai agent", "n8n workflow", 
-    "zapier integration", "make.com", "webhook", "api integration", 
-    "custom gpt", "data extraction", "lead scraping", "crm sync", 
-    "auto responder", "too much manual work", "process automation", 
-    "workflow error", "automate email"
+    # AI / Workflows
+    r"(how to|need to|help|struggling).*(automate|automation|chatbot|agent|workflow|zapier|make\.com|api|sync|scrape|extraction)",
+    r"(api cost|token usage|timeout error|rate limit|can't connect|parsing json|workflow error)"
 ]
 
-VALUE_KEYWORDS_FOCUSED = [
-    "analyzed my metrics", "data shows", "conversion rate by channel",
-    "customer cohort", "product performance analysis", "attribution model",
-    "funnel analysis", "a/b testing results", "analytics breakdown",
-    "revenue by product", "customer acquisition cost", "lifetime value",
-    "repeat rate", "segment analysis", "benchmark against",
-    "competitive analysis", "traffic source breakdown", "channel performance",
-    
-    # AI/Automation Context
-    "llm workflow", "langchain", "crewai", "autogen", "vector database", 
-    "rag pipeline", "python script", "api cost", "token usage"
+VALUE_REGEXES = [
+    r"(analyzed my|data shows|testing results|analytics breakdown|case study|scaled to|my metrics|store performance)",
+    r"(llm workflow|langchain|crewai|autogen|vector database|rag pipeline|architecture)"
 ]
-
-# =============================================================================
-# TIER 2: BROADER KEYWORDS
-# =============================================================================
-INTENT_KEYWORDS_BROADER = [
-    "scaling strategy", "growth bottleneck", "optimization",
-    "trying to improve", "need to understand", "debugging performance",
-    "what's wrong with my store", "how can i improve", "decrease in sales",
-    "audit my", "sales struggling", "low sales", "inconsistent sales",
-    "need growth", "competitive edge", "market position",
-    "pricing strategy", "product mix", "diversify revenue"
-]
-
-VALUE_KEYWORDS_BROADER = [
-    "growth hacking", "case study", "scaled to", "revenue model",
-    "business model", "optimization strategy", "my metrics",
-    "store performance", "customer behavior", "purchase pattern",
-    "repeat purchase", "brand loyalty", "email marketing metrics",
-    "retention strategy", "customer journey", "funnel optimization",
-    "marketing mix",
-]
-
-# Combine into single list for backwards compatibility
-INTENT_KEYWORDS = INTENT_KEYWORDS_FOCUSED + INTENT_KEYWORDS_BROADER
-VALUE_KEYWORDS = VALUE_KEYWORDS_FOCUSED + VALUE_KEYWORDS_BROADER
 
 # =============================================================================
 # SUBREDDIT WEIGHTING (Multiplier applied to final score)
@@ -127,7 +86,9 @@ HOBBYIST_EXCLUDED_PHRASES = [
     "for personal use", "hobby project", "for fun", "just learning",
     "student project", "college project", "school project",
     "my macbook", "gaming pc", "home lab", "homelab", "my local pc",
-    "personal project", "learning python", "for my own use"
+    "personal project", "learning python", "for my own use", "class project",
+    "university project", "homework", "just tinkering", "just playing around",
+    "not a business", "student here", "beginner here", "first time coder"
 ]
 
 # =============================================================================
@@ -137,9 +98,8 @@ MIN_BODY_LENGTH = 0  # Set to 0 to disable minimum body character length filter
 
 EXCLUDED_PHRASES = [
     "just starting", "brand new", "how do i start", "what's the best",
-    "beginner here", "no experience", "first time", "completely new",
-    "never done this before", "is dropshipping dead", "start a store",
-    "how to start", "new to this", "want to start",
+    "no experience", "completely new", "never done this before", 
+    "is dropshipping dead", "start a store", "how to start", "want to start",
     
     # Noise explicitly added by user
     "best e-commerce site", "cheaper alternative", "scam", "report fake", 
@@ -253,6 +213,25 @@ BANNED_WORDS = [
 ]
 
 # =============================================================================
+# STAGE 2: GROQ B2B TRIAGE PROMPT
+# =============================================================================
+GROQ_TRIAGE_PROMPT_TEMPLATE = """You are an elite B2B Lead Qualifier for an AI Automation and E-commerce Growth agency.
+Your job is to read a Reddit post and score it out of 100 based on its value as a commercial lead.
+
+CRITICAL RULES (0 SCORE IF ANY MATCH):
+1. NO HOBBYISTS: If the user is doing this for a school project, learning, tinkering, personal use, or "just for fun", score = 0.
+2. MUST BE COMMERCIAL: They must be operating an actual business, e-commerce store, agency, or facing a real business bottleneck.
+3. NO WANTS/DREAMS: If they say "I want to start a store" but haven't started, score = 0. We only help active businesses.
+
+SCORING CRITERIA (0-100):
+- 85-100: Active business owner explicitly stating a problem we can solve (e.g. sales dropped, workflow failing, too much manual work).
+- 50-84: Operating a business but the problem is vague or general strategy.
+- 0: Hobbyist, student, self-promotion, irrelevant.
+
+Respond ONLY with a strictly formatted JSON object containing exactly two keys: "intent_score" (integer) and "reason" (string, max 10 words).
+No markdown, no preamble."""
+
+# =============================================================================
 # ECOMMERCE: SYSTEM PROMPT & FALLBACKS
 # =============================================================================
 SYSTEM_PROMPT_TEMPLATE = """You are a highly experienced, real-world e-commerce founder hanging out on Reddit (r/{subreddit_name}). You aren't an AI, a marketer, or a corporate bot. You're just a person who has been in the trenches and genuinely wants to help someone out.
@@ -264,8 +243,8 @@ Layer 1 (Subreddit Rules): {layer_1_rules}
 Layer 2 (Subreddit Culture): {layer_2_culture}
 
 How to write (Raw Reddit Voice):
+- CRITICAL MISSION: Give away the exact, actionable solution for FREE in the comment. Be so helpful that they naturally reply to say "thank you" or ask a follow-up. Do not pitch or sell in the comment.
 - Sound completely authentic, warm, and casual. Talk like you're speaking to a peer. 
-- Give immediate, tactical, actionable advice based on your "experience". 
 - Do NOT use formal structure or overly polished language. Use lowercase, contractions, and natural pacing. 
 - NEVER use em-dashes (—) or mid-sentence dashes (-).
 - At the end of the DM, add a gentle, soft statement offering a free audit (e.g., "i can run a free audit on your store if you want a second set of eyes."). Do NOT ask a question.
@@ -293,8 +272,8 @@ Layer 1 (Subreddit Rules): {layer_1_rules}
 Layer 2 (Subreddit Culture): {layer_2_culture}
 
 How to write (Raw Reddit Voice):
+- CRITICAL MISSION: Give away the exact, actionable solution for FREE in the comment. Be so helpful that they naturally reply to say "thank you" or ask a follow-up. Do not pitch or sell in the comment.
 - Sound completely authentic, technical, and casual. Talk like you're speaking to a fellow builder or operator.
-- Give immediate, tactical, actionable advice based on your "experience" building these workflows.
 - Do NOT use formal structure or overly polished language. Use lowercase, contractions, and natural pacing.
 - NEVER use em-dashes (—) or mid-sentence dashes (-).
 - At the end of the DM, add a gentle, soft statement offering a free workflow architecture review (e.g., "i can map out a free workflow architecture for this if you want a second set of eyes."). Do NOT ask a question.

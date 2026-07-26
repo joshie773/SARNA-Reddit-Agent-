@@ -30,7 +30,7 @@ from config import GEMINI_SLEEP_BETWEEN_CALLS
 from reddit_rss_scanner import scan_reddit, save_processed_posts
 from comment_generator import init_gemini, generate_comment_and_dm
 from google_sheets_writer import authenticate_sheets, build_row, append_rows
-from email_notifier import run_notification
+from email_notifier import run_notification, send_high_priority_alert
 
 
 # =============================================================================
@@ -108,6 +108,12 @@ def run_ingestion(test_mode: bool = False):
             success_count += 1
 
             print(f"    ✅ Comment: {len(comment.split())} words | DM: {len(dm.split())} words")
+            
+            # Instant Email Alert for high priority leads
+            total_score = post.get("total_score", 0)
+            if total_score >= 85 and not test_mode:
+                print(f"    🚨 High-Score Lead ({total_score}/100) — Sending instant email alert!")
+                send_high_priority_alert(post, comment, dm)
 
         except Exception as e:
             # If ONE post fails, log and continue — never crash the pipeline

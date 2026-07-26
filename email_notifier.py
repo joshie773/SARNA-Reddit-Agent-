@@ -147,6 +147,48 @@ def send_notification_email(
         return False
 
 
+def send_high_priority_alert(post: dict, comment: str, dm: str) -> bool:
+    """Send an instant email alert for a high-priority lead (Score >= 85)."""
+    sender = os.environ.get("GMAIL_ADDRESS")
+    app_password = os.environ.get("GMAIL_APP_PASSWORD")
+
+    if not sender or not app_password:
+        return False
+        
+    score = post.get('total_score', 0)
+    title = post.get('title', 'Unknown')
+    sub = post.get('subreddit', 'unknown')
+    url = post.get('url', '')
+    
+    msg = EmailMessage()
+    msg["Subject"] = f"🚨 URGENT SARNA LEAD: {score}/100 in r/{sub}"
+    msg["From"] = sender
+    msg["To"] = EMAIL_RECIPIENT
+    
+    body = (
+        f"🚨 HIGH PRIORITY LEAD ALERT 🚨\n\n"
+        f"Score: {score}/100\n"
+        f"Subreddit: r/{sub}\n"
+        f"Title: {title}\n"
+        f"URL: {url}\n\n"
+        f"--- AI COMMENT DRAFT ---\n{comment}\n\n"
+        f"--- AI DM DRAFT ---\n{dm}\n\n"
+        f"Action Required: Reply to this post immediately while it is still fresh!"
+    )
+    
+    msg.set_content(body)
+    
+    try:
+        print(f"    📧 Dispatching urgent alert to {EMAIL_RECIPIENT}...")
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+            smtp.login(sender, app_password)
+            smtp.send_message(msg)
+        return True
+    except Exception as e:
+        print(f"    ❌ Failed to send high priority alert: {e}")
+        return False
+
+
 # =============================================================================
 # Main notification pipeline
 # =============================================================================

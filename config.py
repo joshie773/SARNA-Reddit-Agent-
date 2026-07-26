@@ -94,8 +94,6 @@ HOBBYIST_EXCLUDED_PHRASES = [
 # =============================================================================
 # ANTI-PATTERN FILTERING (Removes low-signal & hobbyist posts)
 # =============================================================================
-MIN_BODY_LENGTH = 0  # Set to 0 to disable minimum body character length filter
-
 EXCLUDED_PHRASES = [
     "just starting", "brand new", "how do i start", "what's the best",
     "no experience", "completely new", "never done this before", 

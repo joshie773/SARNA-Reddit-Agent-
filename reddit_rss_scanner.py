@@ -33,7 +33,6 @@ from config import (
     SCORE_WEIGHT_FRESHNESS,
     SCORE_WEIGHT_BODY_LENGTH,
     SUBREDDIT_WEIGHT,
-    MIN_BODY_LENGTH,
     EXCLUDED_PHRASES,
     GROQ_MODEL,
     GROQ_API_BASE,
@@ -461,15 +460,6 @@ def filter_by_freshness(entries: list[dict]) -> list[dict]:
                 pattern_filtered += 1
                 continue
             
-            # Stage 1 Regex Check (bypass length filter if match)
-            has_regex = any(re.search(pat, searchable) for pat in INTENT_REGEXES) or \
-                        any(re.search(pat, searchable) for pat in VALUE_REGEXES)
-            
-            # Body length filter
-            if len(body) < MIN_BODY_LENGTH and not has_regex:
-                length_filtered += 1
-                continue
-            
             fresh.append(entry)
         else:
             # Post too old, skip
@@ -478,8 +468,6 @@ def filter_by_freshness(entries: list[dict]) -> list[dict]:
     filtered_count = len(entries) - len(fresh)
     if filtered_count > 0:
         print(f"  ⏰ Freshness filter: dropped {filtered_count} posts older than {MAX_POST_AGE_DAYS} days")
-    if length_filtered > 0:
-        print(f"  📝 Body length filter: dropped {length_filtered} posts < {MIN_BODY_LENGTH} chars")
     if pattern_filtered > 0:
         print(f"  ⚠️  Anti-pattern filter: dropped {pattern_filtered} low-signal posts")
 

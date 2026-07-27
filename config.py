@@ -21,22 +21,68 @@ AI_SUBREDDITS = [
 ]
 
 # =============================================================================
-# TIER 1: STAGE 1 REGEX PATTERNS (BROAD NET)
+# TIER 1: INTENT REGEX PATTERNS — RESEARCH-OPTIMIZED
 # =============================================================================
-# These regexes catch broad E-commerce and AI automation pain points.
+# 4 research principles applied:
+#
+# [P1] NON-CAPTURING GROUPS (?:...) — From: "Regex Performance" (last9.io, rexegg.com)
+#      All groups use (?:...) instead of (...). This removes memory allocation overhead
+#      for captured groups we never use, reducing CPU cost per match.
+#
+# [P2] ALTERNATION ORDERING — From: "Optimizing Alternation" (syncfusion.com, last9.io)
+#      Within each (?:a|b|c) group, most common/frequent signals come FIRST.
+#      Python's NFA engine exits the alternation the moment it finds a match,
+#      so ordering is a free performance win.
+#
+# [P3] BOUNDED DISTANCE MATCHING — From: "NLP Precision/Recall" (medium.com)
+#      Replaced greedy .* wildcards with (?:\S+\s+){0,4} "bounded gap" patterns.
+#      This prevents the engine from stretching a single match across 200 words of
+#      unrelated text, eliminating the biggest source of false positives.
+#
+# [P4] CONTEXTUAL WORD BOUNDARIES — From: "Regex Specificity" (NLP classification research)
+#      Patterns are anchored to specific commercial nouns (store, orders, revenue)
+#      so they only fire when pain is tied to a REAL business, not a vague complaint.
+# =============================================================================
+
 INTENT_REGEXES = [
-    # E-commerce pain points (sales, conversions, traffic)
-    r"(drop|tank|declin|down|losing|bad|negative|low|zero|no|stop|inconsistent|struggling).*(sales|revenue|conversion|traffic|roas|cpa|margin|profit|order|checkout)",
-    r"(why am i not|sales have stopped|not converting|wasting money|traffic dropoff)",
-    r"(audit my|what's wrong with my store|decrease in sales)",
-    
-    # Operations & Automation pain points
-    r"(inventory mismatch|customer support volume|too many emails|manual fulfillment|sync inventory|refund requests)",
-    r"(wasting time|repetitive|manual data entry|too much manual)",
-    
-    # AI / Workflows
-    r"(how to|need to|help|struggling).*(automate|automation|chatbot|agent|workflow|zapier|make\.com|api|sync|scrape|extraction)",
-    r"(api cost|token usage|timeout error|rate limit|can't connect|parsing json|workflow error)"
+
+    # --- CLUSTER 1: ACTIVE REVENUE/CONVERSION BLEED ---
+    # Fires when a store owner says their money-making metrics are actively declining.
+    # P2: "sales" first (highest frequency signal), P3: bounded 5-word gap
+    r"(?:sales|revenue|orders|conversions?|roas|checkout)\b(?:\s+\S+){0,5}\s+(?:drop(?:ped|ping)?|tank(?:ed|ing)?|declin(?:ed|ing)?|crash(?:ed|ing)?|fell|fall(?:ing)?|slow(?:ed|ing)?|stopped?|zero|nothing|dead)",
+
+    # Reverse order: the PROBLEM verb leads, the BUSINESS NOUN follows
+    r"(?:drop(?:ped|ping)?|tank(?:ed|ing)?|declin(?:ed|ing)?|crash(?:ed|ing)?|losing|lost)\b(?:\s+\S+){0,4}\s+(?:sales|revenue|orders|customers?|conversions?)",
+
+    # --- CLUSTER 2: SHOPIFY-SPECIFIC OPERATIONAL PAIN ---
+    # P4: Pinned to Shopify-specific nouns (checkout, cart, product page, theme)
+    # to guarantee we are talking to a real Shopify merchant, not a generic blogger.
+    r"\b(?:my\s+)?shopify\b(?:\s+\S+){0,6}\s+(?:broken?|not\s+work(?:ing)?|bug|error|fail(?:ing|ed)?|issue|problem|slow|crash)",
+    r"\b(?:abandoned\s+cart|cart\s+abandon|checkout\s+drop(?:-?off)?|product\s+page\b)(?:\s+\S+){0,5}\s+(?:high|too\s+high|problem|fix|reduce|why)",
+
+    # --- CLUSTER 3: MANUAL OPERATIONS BOTTLENECK ---
+    # P3: Short bounded window ensures "manual" is directly tied to the business task.
+    r"\b(?:manual(?:ly)?|manually)\b(?:\s+\S+){0,3}\s+(?:fulfil(?:ment|ling)?|order(?:s|ing)?|inventory|invoice(?:s)?|data\s+entry|updating|uploading|tracking)",
+    r"\b(?:wasting|waste)\b(?:\s+\S+){0,3}\s+(?:hours?|time|days?)\b(?:\s+\S+){0,4}\s+(?:order|fulfil|inventory|report|updat|entry|reconcil)",
+
+    # --- CLUSTER 4: DATA SYNC / INTEGRATION FAILURES ---
+    # These are MCP's sweet spot — data not flowing between tools.
+    r"\b(?:inventory|orders?|products?|customers?|data)\b(?:\s+\S+){0,4}\s+(?:not\s+sync(?:ing|ed)?|out\s+of\s+sync|mismatch(?:ed)?|wrong|incorrect|duplicat(?:ed|ing)?)",
+    r"\b(?:connect(?:ing)?|integrat(?:ing|ion)?|sync(?:ing)?)\b(?:\s+\S+){0,5}\s+(?:shopify|woocommerce|klaviyo|gorgias|recharge|loop|skio|postscript|attentive)\b",
+
+    # --- CLUSTER 5: SCALE & GROWTH CONSTRAINT ---
+    # P4: Must mention a business object (team, support, orders) alongside the bottleneck.
+    r"\b(?:can't\s+scale|can't\s+keep\s+up|overwhelmed|drowning)\b(?:\s+\S+){0,5}\s+(?:orders?|support|customers?|requests?|tickets?|emails?)",
+    r"\b(?:support\s+tickets?|customer\s+emails?|refund\s+requests?|return\s+requests?)\b(?:\s+\S+){0,4}\s+(?:too\s+many|overwhelming|piling\s+up|out\s+of\s+control|volume)",
+
+    # --- CLUSTER 6: AUTOMATION / WORKFLOW NEED (MCP DIRECT FIT) ---
+    # P2: "automate" first (highest intent signal), then weaker synonyms
+    r"\b(?:automate?|automation|workflow|trigger|api|webhook)\b(?:\s+\S+){0,5}\s+(?:shopify|orders?|inventory|fulfil|customers?|returns?|emails?)",
+    r"\bhow\s+(?:do\s+I|to|can\s+I)\b(?:\s+\S+){0,3}\s+(?:automate?|stop\s+doing\s+manually|connect|integrate|sync)\b(?:\s+\S+){0,4}\s+(?:shopify|store|orders?|inventory)",
+
+    # --- CLUSTER 7: ADVERTISING WASTE ---
+    # P4: Must mention a specific paid channel + the loss signal together.
+    r"\b(?:meta\s+ads?|facebook\s+ads?|google\s+ads?|tiktok\s+ads?|ad\s+spend)\b(?:\s+\S+){0,5}\s+(?:wast(?:ed|ing)|not\s+convert(?:ing)?|losing\s+money|roas|too\s+expensive|not\s+work(?:ing)?)",
 ]
 
 

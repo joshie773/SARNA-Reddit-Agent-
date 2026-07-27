@@ -19,6 +19,12 @@ import sys
 import time
 from datetime import datetime
 
+# Ensure UTF-8 output encoding on Windows consoles
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8")
+
 # Load .env for local development (GitHub Actions uses secrets directly)
 try:
     from dotenv import load_dotenv

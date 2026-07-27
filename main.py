@@ -35,33 +35,28 @@ except ImportError:
 from config import GROQ_COMMENT_SLEEP_BETWEEN_CALLS
 from reddit_rss_scanner import scan_reddit, save_processed_posts
 from comment_generator import generate_comment_and_dm
-from google_sheets_writer import authenticate_sheets, build_row, append_rows
-from email_notifier import run_notification, send_high_priority_alert
+from email_notifier import run_notification, send_lead_alert
 
 
 # =============================================================================
-# Ingestion Pipeline
+# Ingestion Pipeline — Direct Email Engine
 # =============================================================================
 def run_ingestion(test_mode: bool = False):
     """
     Full ingestion pipeline:
-    1. Scan RSS feed for qualified posts
-    2. Initialize Gemini model
-    3. Authenticate Google Sheets
-    4. For each post: generate comment + DM → build row → collect
-    5. Batch-append all rows to Sheet
-    6. Save processed posts ledger
-
-    If test_mode is True, runs everything but skips Sheet writes.
+    1. Scan RSS feed for qualified posts (Stage 1 Regex + Stage 2 Groq Triage)
+    2. For each post: generate comment + DM
+    3. Send direct email alert for EVERY extracted post (no score threshold)
+    4. Save processed posts ledger
     """
     start_time = time.time()
     now = datetime.now()
 
     print(f"\n{'🚀' * 30}")
-    print(f"  SARNA v4.0 — Ingestion Loop")
+    print(f"  SARNA v4.0 — Ingestion Loop (Direct Email)")
     print(f"  {now.strftime('%A, %B %d, %Y at %I:%M %p')}")
     if test_mode:
-        print(f"  ⚠️  TEST MODE — Sheets writes will be skipped")
+        print(f"  ⚠️  TEST MODE — Email alerts will be logged but NOT dispatched")
     print(f"{'🚀' * 30}\n")
 
     # =========================================================================
@@ -75,23 +70,10 @@ def run_ingestion(test_mode: bool = False):
         _print_summary(0, 0, start_time, test_mode)
         return
 
-
-
     # =========================================================================
-    # Step 3: Authenticate Google Sheets (unless test mode)
+    # Step 2: Generate comment + DM & Dispatch Email for EVERY post
     # =========================================================================
-    service, sheet_id = None, None
-    if not test_mode:
-        print("\n📊 Step 3: Authenticating Google Sheets...")
-        service, sheet_id = authenticate_sheets()
-        if not service:
-            print("  ⚠️  Sheets auth failed — will generate comments but cannot write")
-
-    # =========================================================================
-    # Step 4: Generate comment + DM for each post
-    # =========================================================================
-    print(f"\n💬 Step 4: Generating comments for {len(posts)} posts...")
-    rows = []
+    print(f"\n💬 Step 2: Generating comments & dispatching emails for {len(posts)} posts...")
     success_count = 0
 
     for i, post in enumerate(posts, 1):
@@ -104,18 +86,15 @@ def run_ingestion(test_mode: bool = False):
             comment = result["comment"]
             dm = result["dm"]
 
-            # Build Sheet row
-            row = build_row(post, comment, dm)
-            rows.append(row)
-            success_count += 1
-
             print(f"    ✅ Comment: {len(comment.split())} words | DM: {len(dm.split())} words")
             
-            # Instant Email Alert for high priority leads
-            total_score = post.get("total_score", 0)
-            if total_score >= 85 and not test_mode:
-                print(f"    🚨 High-Score Lead ({total_score}/100) — Sending instant email alert!")
-                send_high_priority_alert(post, comment, dm)
+            # Send Email Alert for EVERY extracted lead (no score threshold)
+            if not test_mode:
+                send_lead_alert(post, comment, dm)
+            else:
+                print(f"    🧪 TEST MODE — Email alert generation verified for r/{post['subreddit']}")
+
+            success_count += 1
 
         except Exception as e:
             # If ONE post fails, log and continue — never crash the pipeline
@@ -128,20 +107,9 @@ def run_ingestion(test_mode: bool = False):
             time.sleep(GROQ_COMMENT_SLEEP_BETWEEN_CALLS)
 
     # =========================================================================
-    # Step 5: Batch-append rows to Google Sheet
+    # Step 3: Save processed posts ledger
     # =========================================================================
-    if rows and service and sheet_id and not test_mode:
-        print(f"\n📊 Step 5: Writing {len(rows)} rows to Google Sheet...")
-        append_rows(service, sheet_id, rows)
-    elif test_mode and rows:
-        print(f"\n📊 Step 5: TEST MODE — {len(rows)} rows generated but NOT written to Sheet")
-        for j, row in enumerate(rows, 1):
-            print(f"  Row {j}: {row[0]} | Score: {row[5]} | {row[2][:60]}...")
-
-    # =========================================================================
-    # Step 6: Save processed posts ledger
-    # =========================================================================
-    print(f"\n💾 Step 6: Saving processed posts ledger...")
+    print(f"\n💾 Step 3: Saving processed posts ledger...")
     save_processed_posts(updated_ids)
     print(f"  ✅ Ledger updated: {len(updated_ids)} total tracked IDs")
 

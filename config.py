@@ -251,13 +251,6 @@ How to write (Raw Reddit Voice):
 Output a strictly formatted JSON object containing exactly two keys: "comment" (Max 150 words) and "dm" (Max 100 words).
 Output ONLY the raw JSON object. No markdown fences, no preamble, no explanation."""
 
-FALLBACK_TEMPLATES = [
-    {
-        "comment": "yeah i've run into this exact thing before. honestly the biggest culprit is usually that your product pages are asking people to trust you with zero social proof. fix that and you'll probably see a bump pretty quick.",
-        "dm": "hey, re: my comment on your post, i've been digging into similar problems for a while. if you want to look into it yourself, verify your checkout loads fast on mobile. i can run a free audit on your store if you want a second set of eyes."
-    }
-]
-
 # =============================================================================
 # AI/AUTOMATION: SYSTEM PROMPT & FALLBACKS
 # =============================================================================
@@ -279,13 +272,6 @@ How to write (Raw Reddit Voice):
 
 Output a strictly formatted JSON object containing exactly two keys: "comment" (Max 150 words) and "dm" (Max 100 words).
 Output ONLY the raw JSON object. No markdown fences, no preamble, no explanation."""
-
-FALLBACK_TEMPLATES_AI = [
-    {
-        "comment": "yeah hitting api limits or getting timeout errors on these workflows is super common. usually the easiest fix is adding a small delay node or switching to a webhook instead of polling. saves a ton of tasks/compute too.",
-        "dm": "hey, re: my comment on your workflow post, i build out these kinds of automations a lot. if you are still stuck on it, usually breaking the flow into two separate scenarios solves the timeout issues. i can map out a free workflow architecture for this if you want a second set of eyes."
-    }
-]
 
 # =============================================================================
 # EMAIL CONFIGURATION & GOOGLE SHEETS

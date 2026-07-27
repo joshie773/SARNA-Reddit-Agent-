@@ -28,8 +28,6 @@ from config import (
     SYSTEM_PROMPT_TEMPLATE,
     SYSTEM_PROMPT_TEMPLATE_AI,
     SUBREDDIT_COMPLIANCE,
-    FALLBACK_TEMPLATES,
-    FALLBACK_TEMPLATES_AI,
     AI_SUBREDDITS,
 )
 
@@ -216,27 +214,6 @@ def generate_with_groq(post: dict) -> dict | None:
 
 
 # =============================================================================
-# Fallback template selection
-# =============================================================================
-def get_fallback_template(post: dict) -> dict:
-    """
-    Select a pre-written fallback template.
-    Picks randomly from the template bank based on subreddit type.
-    """
-    subreddit = post.get("subreddit", "unknown")
-    if subreddit in AI_SUBREDDITS:
-        template = random.choice(FALLBACK_TEMPLATES_AI)
-    else:
-        template = random.choice(FALLBACK_TEMPLATES)
-        
-    print(f"    ↩️  Using fallback template for r/{subreddit}")
-    return {
-        "comment": template["comment"],
-        "dm": template["dm"],
-    }
-
-
-# =============================================================================
 # Main interface
 # =============================================================================
 def generate_comment_and_dm(
@@ -247,15 +224,14 @@ def generate_comment_and_dm(
 
     Execution Flow:
       1. Try Groq (Primary)
-      2. Try Pre-written Templates (Secondary Fallback)
+      2. If Groq fails, raise ValueError to skip this post.
     """
     print(f"    🤖 Attempting Groq generation...")
     groq_result = generate_with_groq(post)
     if groq_result:
         return groq_result
 
-    print(f"    ↩️  Groq failed, falling back to template...")
-    return get_fallback_template(post)
+    raise ValueError("Groq comment generation failed (API error, rate limit, or banned words). Skipping post.")
 
 
 # =============================================================================

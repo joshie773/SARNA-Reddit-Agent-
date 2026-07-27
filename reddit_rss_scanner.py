@@ -264,29 +264,57 @@ def _parse_published_time(entry) -> datetime | None:
 # =============================================================================
 def stage1_regex_fuzzy_filter(entries: list[dict]) -> list[dict]:
     """
-    Stage 1: Broad Regex Net to catch obvious problems.
-    Filters out noise and ensures we only send promising posts to Groq.
+    Stage 1: Broad Regex Net to catch obvious SEEKER posts.
+
+    Pre-check: Drop SHARER posts before regex even runs.
+    Sharers = posts that teach, announce, or share findings rather than seek help.
+    Examples of sharers disqualified here:
+      - "How I would reduce repetitive customer support for a Shopify store"
+      - "I built an open-source safety gate for AI-generated n8n workflows"
+      - "Replaced a few apps with custom code recently"
+      - "Suppliers quietly raise prices... Here's what I learned building a tool"
+      - "I ran the same workflows 5,000+ times on Zapier, Make and n8n"
     """
+    # SHARER title prefix patterns — applied against the TITLE ONLY (fast string check)
+    SHARER_PREFIXES = [
+        "i built", "i made", "i ran ", "i created", "i wrote", "i launched",
+        "i released", "i published", "how i ", "here's what i ", "here's how i",
+        "what i've learned", "what i learned", "til ", "psa:", "[psa]",
+        "sharing my", "just shipped", "just released", "just launched",
+        "replaced a few", "replaced my", "swapped my", "switched from",
+        "show hn:", "show reddit:", "i open sourced",
+    ]
+
     tagged = []
-    
+    sharer_dropped = 0
+
     for entry in entries:
+        title_lower = entry.get("title", "").lower().strip()
+
+        # Pre-check: discard SHARERS based on title prefix before running regex
+        if any(title_lower.startswith(prefix) for prefix in SHARER_PREFIXES):
+            sharer_dropped += 1
+            continue
+
         searchable = f"{entry['title']} {entry['body']}".lower()
-        
+
         # Check against Regex patterns
         intent_hits = sum(1 for pattern in INTENT_REGEXES if re.search(pattern, searchable))
-        
+
         if intent_hits == 0:
             continue
-            
+
         commercial_hits = sum(1 for kw in COMMERCIAL_KEYWORDS if kw in searchable)
-        
+
         entry["regex_intent_hits"] = intent_hits
         entry["commercial_score"] = commercial_hits  # Base commercial score from keywords
         entry["match_type"] = "stage1_regex"
         entry["keyword_tier"] = "regex_pass"
-        
+
         tagged.append(entry)
-        
+
+    if sharer_dropped > 0:
+        print(f"  🚫 Sharer pre-check: dropped {sharer_dropped} teach/share posts before regex")
     print(f"  🎯 Stage 1 Regex Filter: {len(tagged)} posts passed to Stage 2")
     return tagged
 

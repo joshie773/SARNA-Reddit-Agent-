@@ -47,18 +47,25 @@ AI_SUBREDDITS = [
 INTENT_REGEXES = [
 
     # --- CLUSTER 1: ACTIVE REVENUE/CONVERSION BLEED ---
-    # Fires when a store owner says their money-making metrics are actively declining.
+    # TRUE POSITIVE: "Getting traffic and add-to-carts but zero checkouts, what am I missing?"
     # P2: "sales" first (highest frequency signal), P3: bounded 5-word gap
     r"(?:sales|revenue|orders|conversions?|roas|checkout)\b(?:\s+\S+){0,5}\s+(?:drop(?:ped|ping)?|tank(?:ed|ing)?|declin(?:ed|ing)?|crash(?:ed|ing)?|fell|fall(?:ing)?|slow(?:ed|ing)?|stopped?|zero|nothing|dead)",
 
     # Reverse order: the PROBLEM verb leads, the BUSINESS NOUN follows
     r"(?:drop(?:ped|ping)?|tank(?:ed|ing)?|declin(?:ed|ing)?|crash(?:ed|ing)?|losing|lost)\b(?:\s+\S+){0,4}\s+(?:sales|revenue|orders|customers?|conversions?)",
 
+    # "Traffic but zero checkouts" conversion gap — direct seeker signal
+    r"\b(?:traffic|visitors?|clicks?|add.to.cart)\b(?:\s+\S+){0,6}\s+(?:zero|no|not?)\s+(?:sales|orders?|checkouts?|conversions?)",
+    r"\b(?:traffic|visitors?)\b(?:\s+\S+){0,5}\s+(?:but|yet)\b(?:\s+\S+){0,4}\s+(?:not\s+convert|no\s+(?:sales|orders?|checkouts?)|what\s+am\s+i\s+missing)",
+
     # --- CLUSTER 2: SHOPIFY-SPECIFIC OPERATIONAL PAIN ---
-    # P4: Pinned to Shopify-specific nouns (checkout, cart, product page, theme)
-    # to guarantee we are talking to a real Shopify merchant, not a generic blogger.
+    # TRUE POSITIVE: "500+ visits a day to a page that doesn't exist"
     r"\b(?:my\s+)?shopify\b(?:\s+\S+){0,6}\s+(?:broken?|not\s+work(?:ing)?|bug|error|fail(?:ing|ed)?|issue|problem|slow|crash)",
-    r"\b(?:abandoned\s+cart|cart\s+abandon|checkout\s+drop(?:-?off)?|product\s+page\b)(?:\s+\S+){0,5}\s+(?:high|too\s+high|problem|fix|reduce|why)",
+    r"\b(?:abandoned\s+cart|cart\s+abandon|checkout\s+drop(?:-?off)?|product\s+page\b)(?:\s+\S+){0,5}\s+(?:high|too\s+high|problem|fix|reduce|why|handling|recovery|recover)",
+    # Page not found / broken links sending live store traffic nowhere
+    # TRUE POSITIVE: "500+ visits a day to a page that doesn't exist"
+    r"\b(?:page\s+that\s+doesn.t\s+exist|404|broken\s+link|missing\s+page|dead\s+link|page\s+not\s+found)\b",
+    r"\b(?:visits?|traffic|clicks?)\b(?:\s+\S+){0,5}\s+(?:page\s+that\s+doesn.t\s+exist|404|missing\s+page|dead\s+link)",
 
     # --- CLUSTER 3: MANUAL OPERATIONS BOTTLENECK ---
     # P3: Short bounded window ensures "manual" is directly tied to the business task.
@@ -66,24 +73,32 @@ INTENT_REGEXES = [
     r"\b(?:wasting|waste)\b(?:\s+\S+){0,3}\s+(?:hours?|time|days?)\b(?:\s+\S+){0,4}\s+(?:order|fulfil|inventory|report|updat|entry|reconcil)",
 
     # --- CLUSTER 4: DATA SYNC / INTEGRATION FAILURES ---
-    # These are MCP's sweet spot — data not flowing between tools.
+    # MCP's sweet spot — data not flowing between tools.
     r"\b(?:inventory|orders?|products?|customers?|data)\b(?:\s+\S+){0,4}\s+(?:not\s+sync(?:ing|ed)?|out\s+of\s+sync|mismatch(?:ed)?|wrong|incorrect|duplicat(?:ed|ing)?)",
     r"\b(?:connect(?:ing)?|integrat(?:ing|ion)?|sync(?:ing)?)\b(?:\s+\S+){0,5}\s+(?:shopify|woocommerce|klaviyo|gorgias|recharge|loop|skio|postscript|attentive)\b",
 
     # --- CLUSTER 5: SCALE & GROWTH CONSTRAINT ---
-    # P4: Must mention a business object (team, support, orders) alongside the bottleneck.
     r"\b(?:can't\s+scale|can't\s+keep\s+up|overwhelmed|drowning)\b(?:\s+\S+){0,5}\s+(?:orders?|support|customers?|requests?|tickets?|emails?)",
     r"\b(?:support\s+tickets?|customer\s+emails?|refund\s+requests?|return\s+requests?)\b(?:\s+\S+){0,4}\s+(?:too\s+many|overwhelming|piling\s+up|out\s+of\s+control|volume)",
 
     # --- CLUSTER 6: AUTOMATION / WORKFLOW NEED (MCP DIRECT FIT) ---
-    # P2: "automate" first (highest intent signal), then weaker synonyms
     r"\b(?:automate?|automation|workflow|trigger|api|webhook)\b(?:\s+\S+){0,5}\s+(?:shopify|orders?|inventory|fulfil|customers?|returns?|emails?)",
     r"\bhow\s+(?:do\s+I|to|can\s+I)\b(?:\s+\S+){0,3}\s+(?:automate?|stop\s+doing\s+manually|connect|integrate|sync)\b(?:\s+\S+){0,4}\s+(?:shopify|store|orders?|inventory)",
 
     # --- CLUSTER 7: ADVERTISING WASTE ---
-    # P4: Must mention a specific paid channel + the loss signal together.
     r"\b(?:meta\s+ads?|facebook\s+ads?|google\s+ads?|tiktok\s+ads?|ad\s+spend)\b(?:\s+\S+){0,5}\s+(?:wast(?:ed|ing)|not\s+convert(?:ing)?|losing\s+money|roas|too\s+expensive|not\s+work(?:ing)?)",
+
+    # --- CLUSTER 8: AGENCY / CLIENT WORK SEEKING SOLUTIONS ---
+    # TRUE POSITIVE: "Handling ads for a client's Shopify store (~$35k/mo), want to add something more organic"
+    # Agencies managing live Shopify stores + explicitly asking for advice/tools
+    r"\b(?:client.s?\s+(?:shopify\s+)?store|managing\s+(?:a\s+)?(?:shopify\s+)?store|handling\s+(?:ads?|marketing)\s+for)\b(?:\s+\S+){0,8}\s+(?:want|need|looking|suggest|recommend|add|ideas?|options?)",
+
+    # --- CLUSTER 9: DIRECT HOW-TO QUESTION ON SHOPIFY OPERATIONS ---
+    # TRUE POSITIVE: "How are you handling abandoned cart recovery for customers in MENA countries?"
+    # "How are you handling X" / "How do you manage X" for a specific live business operation
+    r"\bhow\s+(?:are\s+you|do\s+you|should\s+I|can\s+I)\s+(?:handle|deal\s+with|manage|set\s+up|fix|tackle|approach)\b(?:\s+\S+){0,6}\s+(?:abandoned\s+cart|checkout|orders?|returns?|refunds?|inventory|fulfil|support|customers?|retention)",
 ]
+
 
 
 # =============================================================================
@@ -228,20 +243,38 @@ BANNED_WORDS = [
 # =============================================================================
 # STAGE 2: GROQ B2B TRIAGE PROMPT
 # =============================================================================
-GROQ_TRIAGE_PROMPT_TEMPLATE = """You are an elite B2B Lead Qualifier for an AI Automation and E-commerce Growth agency.
-Your job is to read a Reddit post and score it out of 100 based on its value as a commercial lead.
+GROQ_TRIAGE_PROMPT_TEMPLATE = """You are an elite B2B Lead Qualifier for Sahajta AI — a company that builds MCP (Model Context Protocol) integrations for Shopify-connected e-commerce stores. Our MCP service connects directly to a merchant's live Shopify data to automate operations, fix conversion leaks, and eliminate manual work.
 
-CRITICAL RULES (0 SCORE IF ANY MATCH):
-1. NO HOBBYISTS: If the user is doing this for a school project, learning, tinkering, personal use, or "just for fun", score = 0.
-2. MUST BE COMMERCIAL: They must be operating an actual business, e-commerce store, agency, or facing a real business bottleneck.
-3. NO WANTS/DREAMS: If they say "I want to start a store" but haven't started, score = 0. We only help active businesses.
+Your job: read a Reddit post and score it 0-100 based on how valuable it is as a commercial lead.
 
-SCORING CRITERIA (0-100):
-- 95-100: (EXTREMELY RARE) "Hair on fire" emergency. The business owner explicitly states they are actively bleeding money right now, losing customers, or their core systems are completely down and they need immediate help.
-- 80-94: (RARE) Clear, pressing business bottleneck with strong intent to solve it (e.g. "my ad spend is being wasted", "my fulfillment process takes 10 hours a week"). They are actively seeking to fix a specific operational leak.
-- 50-79: (COMMON) Operating a business, but the problem is vague, highly theoretical, or just asking for general strategy ("what's the best way to scale?", "how do you handle marketing?").
-- 20-49: Early-stage wantrepreneurs, "I want to start a business," or extremely low-urgency tech discussions.
-- 0: Hobbyist, student, self-promotion, irrelevant.
+THE MOST CRITICAL DISTINCTION — SEEKER vs SHARER:
+A SEEKER is struggling with a real problem right now and is asking for a solution. → SCORE NORMALLY.
+A SHARER is posting to teach, announce, or share — they are NOT asking for help. → SCORE 0.
+
+SHARER EXAMPLES (score = 0 for all of these):
+- "How I would reduce repetitive customer support for a Shopify store" (teaching, not asking)
+- "I built an open-source safety gate for AI-generated n8n workflows" (announcing a project)
+- "Replaced a few apps with custom code recently" (sharing a win, not asking for help)
+- "Suppliers quietly raise prices... Here's what I learned building a tool" (sharing knowledge)
+- "I ran the same workflows 5,000+ times on Zapier, Make and n8n" (publishing research)
+- Any post starting with: "I built", "I ran", "How I", "Here's what I learned", "What I've learned", "TIL"
+
+OTHER DISQUALIFIERS (score = 0):
+- Hobbyist / student doing this for learning, fun, school project, or personal use
+- Wantrepreneur: "I want to start a store" but hasn't started yet
+- Generic tool recommendation requests not tied to Shopify or e-commerce operations
+- Theoretical debates with no real business problem behind them
+
+SCORING CRITERIA — SEEKERS ONLY (0-100):
+- 95-100: (EXTREMELY RARE) "Hair on fire" emergency. Business is actively bleeding money or systems are completely down RIGHT NOW.
+- 80-94: (RARE) Clear, pressing bottleneck with strong intent to fix it.
+  SCORE 88 EXAMPLE: "Getting traffic and add-to-carts but zero checkouts, what am I missing?"
+  SCORE 82 EXAMPLE: "500+ visits a day to a page that doesn't exist on my Shopify store, anyone else?"
+- 50-79: (COMMON) Active business, asking for solutions or strategy, no acute emergency.
+  SCORE 72 EXAMPLE: "Handling ads for a client's Shopify store (~$35k/mo), want to add something more organic on the retention side"
+  SCORE 65 EXAMPLE: "How are you handling abandoned cart recovery for customers in MENA/Arab countries?"
+- 20-49: Early-stage, low urgency, or tangentially related to e-commerce.
+- 0: Sharer, hobbyist, student, theoretical, irrelevant.
 
 Respond ONLY with a strictly formatted JSON object containing exactly two keys: "intent_score" (integer) and "reason" (string, max 10 words).
 No markdown, no preamble."""

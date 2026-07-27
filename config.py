@@ -39,11 +39,6 @@ INTENT_REGEXES = [
     r"(api cost|token usage|timeout error|rate limit|can't connect|parsing json|workflow error)"
 ]
 
-VALUE_REGEXES = [
-    r"(analyzed my|data shows|testing results|analytics breakdown|case study|scaled to|my metrics|store performance)",
-    r"(llm workflow|langchain|crewai|autogen|vector database|rag pipeline|architecture)"
-]
-
 
 # =============================================================================
 # =============================================================================
@@ -85,7 +80,6 @@ EXCLUDED_PHRASES = [
 # =============================================================================
 SCORE_WEIGHT_INTENT = 70      # Groq dictates the vast majority of the score
 SCORE_WEIGHT_COMMERCIAL = 15  # Max 15 pts (5 pts per explicit commercial keyword)
-SCORE_WEIGHT_VALUE = 0        # Value words alone give 0 base score
 SCORE_WEIGHT_FRESHNESS = 10   # Freshness decay over 7 days
 SCORE_WEIGHT_BODY_LENGTH = 5  # Minor bonus for body detail
 

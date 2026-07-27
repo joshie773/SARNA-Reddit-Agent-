@@ -21,7 +21,6 @@ import requests
 from config import (
     TARGET_SUBREDDITS,
     INTENT_REGEXES,
-    VALUE_REGEXES,
     COMMERCIAL_KEYWORDS,
     MAX_POSTS_PER_RUN,
     MAX_POST_AGE_DAYS,
@@ -29,7 +28,6 @@ from config import (
     PROCESSED_POSTS_MAX,
     SCORE_WEIGHT_INTENT,
     SCORE_WEIGHT_COMMERCIAL,
-    SCORE_WEIGHT_VALUE,
     SCORE_WEIGHT_FRESHNESS,
     SCORE_WEIGHT_BODY_LENGTH,
     EXCLUDED_PHRASES,
@@ -276,15 +274,13 @@ def stage1_regex_fuzzy_filter(entries: list[dict]) -> list[dict]:
         
         # Check against Regex patterns
         intent_hits = sum(1 for pattern in INTENT_REGEXES if re.search(pattern, searchable))
-        value_hits = sum(1 for pattern in VALUE_REGEXES if re.search(pattern, searchable))
         
-        if intent_hits == 0 and value_hits == 0:
+        if intent_hits == 0:
             continue
             
         commercial_hits = sum(1 for kw in COMMERCIAL_KEYWORDS if kw in searchable)
         
         entry["regex_intent_hits"] = intent_hits
-        entry["regex_value_hits"] = value_hits
         entry["commercial_score"] = commercial_hits  # Base commercial score from keywords
         entry["match_type"] = "stage1_regex"
         entry["keyword_tier"] = "regex_pass"

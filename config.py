@@ -191,10 +191,10 @@ CRITICAL RULES (0 SCORE IF ANY MATCH):
 3. NO WANTS/DREAMS: If they say "I want to start a store" but haven't started, score = 0. We only help active businesses.
 
 SCORING CRITERIA (0-100):
-- 90-100: Urgent, critical business bottleneck (e.g. losing money, systems actively breaking) that requires immediate intervention.
-- 75-89: Clear business problem or inefficiency (e.g. manual work scaling issues, poor conversion rates), but not an absolute emergency.
-- 50-74: General business operational questions, seeking strategy or advice without a specific broken bottleneck.
-- 20-49: Early-stage business questions, hypothetical scaling, or low-urgency tech discussions.
+- 95-100: (EXTREMELY RARE) "Hair on fire" emergency. The business owner explicitly states they are actively bleeding money right now, losing customers, or their core systems are completely down and they need immediate help.
+- 80-94: (RARE) Clear, pressing business bottleneck with strong intent to solve it (e.g. "my ad spend is being wasted", "my fulfillment process takes 10 hours a week"). They are actively seeking to fix a specific operational leak.
+- 50-79: (COMMON) Operating a business, but the problem is vague, highly theoretical, or just asking for general strategy ("what's the best way to scale?", "how do you handle marketing?").
+- 20-49: Early-stage wantrepreneurs, "I want to start a business," or extremely low-urgency tech discussions.
 - 0: Hobbyist, student, self-promotion, irrelevant.
 
 Respond ONLY with a strictly formatted JSON object containing exactly two keys: "intent_score" (integer) and "reason" (string, max 10 words).

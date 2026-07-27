@@ -1,14 +1,13 @@
 """
 SARNA v4.0 — Comment & DM Generator
 =====================================
-Calls Gemini 2.0 Flash with the dual-layer compliance prompt to generate:
+Calls Groq LLM with the dual-layer compliance prompt to generate:
   1. A public value comment (max 150 words, ultra-casual)
   2. A private bridge DM (max 100 words, contextual follow-up)
 
 Includes:
-  - Strict 4.5-second sleep between API calls (protects 15 RPM free tier)
-  - Banned word scanning with automatic retry (max 2 retries)
-  - Pre-written fallback templates when Gemini fails
+  - Banned word scanning with automatic retry
+  - Pre-written fallback templates when API fails
   - JSON output parsing with error recovery
 """
 
@@ -19,16 +18,12 @@ import re
 import time
 
 import requests
-from google import genai
-from google.genai import types
 
 from config import (
-    GEMINI_MODEL,
-    GEMINI_SLEEP_BETWEEN_CALLS,
-    GEMINI_MAX_RETRIES,
-    GROQ_MODEL,
+    GROQ_COMMENT_MODEL,
+    GROQ_COMMENT_SLEEP_BETWEEN_CALLS,
+    GROQ_COMMENT_MAX_RETRIES,
     GROQ_API_BASE,
-    GROQ_MAX_RETRIES,
     BANNED_WORDS,
     SYSTEM_PROMPT_TEMPLATE,
     SYSTEM_PROMPT_TEMPLATE_AI,
@@ -37,21 +32,6 @@ from config import (
     FALLBACK_TEMPLATES_AI,
     AI_SUBREDDITS,
 )
-
-
-# =============================================================================
-# Gemini initialization
-# =============================================================================
-def init_gemini() -> genai.Client | None:
-    """Initialize the Gemini client. Returns None if API key is missing."""
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        print("  ⚠️  GEMINI_API_KEY not set — will use fallback templates only")
-        return None
-
-    client = genai.Client(api_key=api_key)
-    print(f"  ✅ Gemini model ready ({GEMINI_MODEL})")
-    return client
 
 
 # =============================================================================
@@ -148,75 +128,7 @@ def _build_system_prompt(subreddit: str) -> str:
     )
 
 
-def generate_with_gemini(
-    client: genai.Client,
-    post: dict,
-) -> dict | None:
-    """
-    Generate comment + DM using Gemini with retry logic.
 
-    Returns dict with 'comment' and 'dm' keys, or None on total failure.
-    """
-    subreddit = post.get("subreddit", "unknown")
-    system_prompt = _build_system_prompt(subreddit)
-    user_prompt = _build_prompt(post)
-
-    for attempt in range(1, GEMINI_MAX_RETRIES + 2):  # 1 initial + 2 retries = 3 total
-        try:
-            response = client.models.generate_content(
-                model=GEMINI_MODEL,
-                contents=user_prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=system_prompt,
-                    temperature=1.5,
-                ),
-            )
-
-            raw_text = response.text
-            if not raw_text:
-                print(f"    ⚠️  Empty Gemini response (attempt {attempt})")
-                continue
-
-            # Parse JSON
-            parsed = parse_llm_json(raw_text)
-            if not parsed:
-                print(f"    ⚠️  Invalid JSON from Gemini (attempt {attempt})")
-                if attempt <= GEMINI_MAX_RETRIES:
-                    time.sleep(GEMINI_SLEEP_BETWEEN_CALLS)
-                continue
-
-            # Check for banned words in both outputs
-            comment_violations = check_blacklist(parsed["comment"])
-            dm_violations = check_blacklist(parsed.get("dm", ""))
-            all_violations = comment_violations + dm_violations
-
-            if all_violations:
-                print(f"    ⚠️  Banned words detected: {all_violations[:3]} (attempt {attempt})")
-                if attempt <= GEMINI_MAX_RETRIES:
-                    # Add stricter instruction for retry
-                    user_prompt += (
-                        f"\n\nCRITICAL RETRY: Your previous output contained banned words: "
-                        f"{', '.join(all_violations)}. "
-                        f"Remove ALL corporate jargon. Sound like a real human. "
-                        f"Use lowercase, contractions, casual fillers."
-                    )
-                    time.sleep(GEMINI_SLEEP_BETWEEN_CALLS)
-                    continue
-                else:
-                    # Max retries hit — fall through to fallback
-                    print(f"    ❌ Banned words persist after {GEMINI_MAX_RETRIES} retries")
-                    return None
-
-            # Clean output — success
-            return parsed
-
-        except Exception as e:
-            print(f"    ❌ Gemini API error (attempt {attempt}): {e}")
-            if attempt <= GEMINI_MAX_RETRIES:
-                time.sleep(GEMINI_SLEEP_BETWEEN_CALLS)
-            continue
-
-    return None  # All attempts exhausted
 
 
 # =============================================================================
@@ -227,9 +139,10 @@ def generate_with_groq(post: dict) -> dict | None:
     Generate comment + DM using Groq via standard HTTP request.
     Handles banned word checks similarly to Gemini.
     """
-    api_key = os.environ.get("GROQ_API_KEY")
+    # Use dedicated GROQ_API_KEY_COMMENT if available, otherwise fallback to GROQ_API_KEY
+    api_key = os.environ.get("GROQ_API_KEY_COMMENT") or os.environ.get("GROQ_API_KEY")
     if not api_key:
-        print("    ⚠️  GROQ_API_KEY not set — skipping secondary LLM fallback")
+        print("    ⚠️  GROQ_API_KEY not set — skipping LLM generation")
         return None
 
     subreddit = post.get("subreddit", "unknown")
@@ -241,10 +154,10 @@ def generate_with_groq(post: dict) -> dict | None:
         "Content-Type": "application/json"
     }
 
-    for attempt in range(1, GROQ_MAX_RETRIES + 2):
+    for attempt in range(1, GROQ_COMMENT_MAX_RETRIES + 2):
         try:
             payload = {
-                "model": GROQ_MODEL,
+                "model": GROQ_COMMENT_MODEL,
                 "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
@@ -277,23 +190,26 @@ def generate_with_groq(post: dict) -> dict | None:
 
             if all_violations:
                 print(f"    ⚠️  Groq banned words detected: {all_violations[:3]} (attempt {attempt})")
-                if attempt <= GROQ_MAX_RETRIES:
+                if attempt <= GROQ_COMMENT_MAX_RETRIES:
                     user_prompt += (
                         f"\n\nCRITICAL RETRY: Your previous output contained banned words: "
                         f"{', '.join(all_violations)}. "
                         f"Remove ALL corporate jargon. Sound like a real human. "
                         f"Use lowercase, contractions, casual fillers."
                     )
+                    time.sleep(GROQ_COMMENT_SLEEP_BETWEEN_CALLS)
                     continue
                 else:
                     print(f"    ❌ Groq banned words persist after retries")
                     return None
 
-            print(f"    ✅ Successfully generated with Groq ({GROQ_MODEL})")
+            print(f"    ✅ Successfully generated with Groq ({GROQ_COMMENT_MODEL})")
             return parsed
 
         except Exception as e:
             print(f"    ❌ Groq API error (attempt {attempt}): {e}")
+            if attempt <= GROQ_COMMENT_MAX_RETRIES:
+                time.sleep(GROQ_COMMENT_SLEEP_BETWEEN_CALLS)
             continue
 
     return None
@@ -325,25 +241,14 @@ def get_fallback_template(post: dict) -> dict:
 # =============================================================================
 def generate_comment_and_dm(
     post: dict,
-    client: genai.Client | None = None,
 ) -> dict:
     """
     Generate a public comment and private DM for a Reddit post.
 
     Execution Flow:
-      1. Try Gemini (Primary)
-      2. Try Groq (Secondary Fallback)
-      3. Try Pre-written Templates (Tertiary Fallback)
+      1. Try Groq (Primary)
+      2. Try Pre-written Templates (Secondary Fallback)
     """
-    if client is not None:
-        print(f"    🤖 Attempting Gemini generation...")
-        result = generate_with_gemini(client, post)
-        if result:
-            return result
-        print(f"    ⚠️  Gemini failed or rate-limited. Falling back to Groq...")
-    else:
-        print(f"    ⚠️  Gemini client unavailable. Attempting Groq...")
-
     print(f"    🤖 Attempting Groq generation...")
     groq_result = generate_with_groq(post)
     if groq_result:
@@ -380,10 +285,8 @@ if __name__ == "__main__":
     if "--test" in sys.argv:
         print("🧪 Running comment generator test...\n")
 
-    client = init_gemini()
-
     print("\n=== Generating comment + DM ===")
-    result = generate_comment_and_dm(sample_post, client)
+    result = generate_comment_and_dm(sample_post)
     print(f"\n📝 Comment ({len(result['comment'].split())} words):")
     print(result["comment"])
     print(f"\n💬 DM ({len(result['dm'].split())} words):")

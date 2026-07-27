@@ -189,15 +189,15 @@ SUBREDDIT_COMPLIANCE = {
 }
 
 # =============================================================================
-# GEMINI & GROQ CONFIGURATION
+# GROQ CONFIGURATION (Stage 2 Triage & Comment Generation)
 # =============================================================================
-GEMINI_MODEL = "gemini-2.0-flash"
-GEMINI_SLEEP_BETWEEN_CALLS = 10
-GEMINI_MAX_RETRIES = 0
-
 GROQ_MODEL = "llama-3.3-70b-versatile"
 GROQ_API_BASE = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_MAX_RETRIES = 1
+
+GROQ_COMMENT_MODEL = "llama-3.3-70b-versatile"
+GROQ_COMMENT_SLEEP_BETWEEN_CALLS = 1.0
+GROQ_COMMENT_MAX_RETRIES = 2
 
 # Words that trigger automatic regeneration or fallback
 BANNED_WORDS = [

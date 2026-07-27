@@ -26,9 +26,9 @@ try:
 except ImportError:
     pass
 
-from config import GEMINI_SLEEP_BETWEEN_CALLS
+from config import GROQ_COMMENT_SLEEP_BETWEEN_CALLS
 from reddit_rss_scanner import scan_reddit, save_processed_posts
-from comment_generator import init_gemini, generate_comment_and_dm
+from comment_generator import generate_comment_and_dm
 from google_sheets_writer import authenticate_sheets, build_row, append_rows
 from email_notifier import run_notification, send_high_priority_alert
 
@@ -69,11 +69,7 @@ def run_ingestion(test_mode: bool = False):
         _print_summary(0, 0, start_time, test_mode)
         return
 
-    # =========================================================================
-    # Step 2: Initialize Gemini
-    # =========================================================================
-    print("🤖 Step 2: Initializing Gemini...")
-    gemini_client = init_gemini()
+
 
     # =========================================================================
     # Step 3: Authenticate Google Sheets (unless test mode)
@@ -98,7 +94,7 @@ def run_ingestion(test_mode: bool = False):
 
         try:
             # Generate comment and DM
-            result = generate_comment_and_dm(post, gemini_client)
+            result = generate_comment_and_dm(post)
             comment = result["comment"]
             dm = result["dm"]
 
@@ -120,10 +116,10 @@ def run_ingestion(test_mode: bool = False):
             print(f"    ❌ Failed to process post: {e}")
             continue
 
-        # Rate limit: 4.5-second sleep between Gemini calls
-        if gemini_client and i < len(posts):
-            print(f"    ⏳ Rate limit sleep ({GEMINI_SLEEP_BETWEEN_CALLS}s)...")
-            time.sleep(GEMINI_SLEEP_BETWEEN_CALLS)
+        # Rate limit: sleep between Groq calls
+        if i < len(posts):
+            print(f"    ⏳ Rate limit sleep ({GROQ_COMMENT_SLEEP_BETWEEN_CALLS}s)...")
+            time.sleep(GROQ_COMMENT_SLEEP_BETWEEN_CALLS)
 
     # =========================================================================
     # Step 5: Batch-append rows to Google Sheet

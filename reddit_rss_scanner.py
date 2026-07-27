@@ -32,7 +32,6 @@ from config import (
     SCORE_WEIGHT_VALUE,
     SCORE_WEIGHT_FRESHNESS,
     SCORE_WEIGHT_BODY_LENGTH,
-    SUBREDDIT_WEIGHT,
     EXCLUDED_PHRASES,
     GROQ_MODEL,
     GROQ_API_BASE,
@@ -404,10 +403,7 @@ def rank_and_select(posts: list[dict], max_posts: int = 20) -> list[dict]:
         sub = p["subreddit"]
         subreddit_counts[sub] = subreddit_counts.get(sub, 0) + 1
         
-        # Apply subreddit priority multiplier directly (No diversity bonus)
-        subreddit_weight = SUBREDDIT_WEIGHT.get(sub, 1.0)
-        weighted_base = p["base_score"] * subreddit_weight
-        total_score = min(100.0, weighted_base)
+        total_score = min(100.0, p["base_score"])
         
         p["total_score"] = round(total_score, 1)
         

@@ -44,31 +44,6 @@ VALUE_REGEXES = [
     r"(llm workflow|langchain|crewai|autogen|vector database|rag pipeline|architecture)"
 ]
 
-# =============================================================================
-# SUBREDDIT WEIGHTING (Multiplier applied to final score)
-# =============================================================================
-SUBREDDIT_WEIGHT = {
-    # AI/Automation Tier 1
-    "Automation": 1.1,
-    "AI_Agents": 1.1,
-    "zapier": 1.1,
-    "n8n": 1.0,
-    "LocalLLaMA": 0.9,
-    
-    # E-commerce Tier
-    "shopify": 1.1,
-    "DTC": 1.0,
-    "ecommerce": 1.0,
-    "ShopifyAppDev": 1.0,
-    "shopifyDev": 1.0,
-    
-    # Lower value
-    "smallbusiness": 0.8,
-    "EntrepreneurIndia": 0.7,
-    "IndianStartups": 0.7,
-    "dropship": 0.6,
-    "juststart": 0.6,
-}
 
 # =============================================================================
 # =============================================================================

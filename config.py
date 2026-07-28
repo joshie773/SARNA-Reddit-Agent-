@@ -303,6 +303,7 @@ SHARER EXAMPLES (score = 0 for all of these):
 OTHER DISQUALIFIERS (score = 0):
 - Hobbyist / student doing this for learning, fun, school project, or personal use
 - Wantrepreneur: "I want to start a store" but hasn't started yet
+- NOT E-COMMERCE: Physical brick-and-mortar stores, offline retail, finance dealers, or generic IT support. If the post is NOT about a digital e-commerce/Shopify business, score it 0 immediately.
 
 SCORING CRITERIA — SEEKERS ONLY (0-100):
 BE CYNICAL AND RUTHLESS. DO NOT HAND OUT HIGH SCORES LIGHTLY. Most posts are average (20-40).

@@ -20,7 +20,9 @@ import requests
 
 from config import (
     TARGET_SUBREDDITS,
+    AI_SUBREDDITS,
     INTENT_REGEXES,
+    AI_INTENT_REGEXES,
     COMMERCIAL_KEYWORDS,
     MAX_POSTS_PER_RUN,
     MAX_POST_AGE_DAYS,
@@ -33,7 +35,8 @@ from config import (
     EXCLUDED_PHRASES,
     GROQ_MODEL,
     GROQ_API_BASE,
-    GROQ_TRIAGE_PROMPT_TEMPLATE
+    GROQ_TRIAGE_PROMPT_TEMPLATE,
+    GROQ_TRIAGE_PROMPT_TEMPLATE_AI,
 )
 
 
@@ -304,20 +307,12 @@ def _parse_published_time(entry) -> datetime | None:
 # =============================================================================
 # Keyword tagging & Scoring
 # =============================================================================
-def stage1_regex_fuzzy_filter(entries: list[dict]) -> list[dict]:
+def stage1_regex_fuzzy_filter(entries: list[dict], track: str = "ecom") -> list[dict]:
     """
     Stage 1: Broad Regex Net to catch obvious SEEKER posts.
-
-    Pre-check: Drop SHARER posts before regex even runs.
-    Sharers = posts that teach, announce, or share findings rather than seek help.
-    Examples of sharers disqualified here:
-      - "How I would reduce repetitive customer support for a Shopify store"
-      - "I built an open-source safety gate for AI-generated n8n workflows"
-      - "Replaced a few apps with custom code recently"
-      - "Suppliers quietly raise prices... Here's what I learned building a tool"
-      - "I ran the same workflows 5,000+ times on Zapier, Make and n8n"
+    track='ecom'  → uses INTENT_REGEXES (Shopify/merchant signals)
+    track='ai'    → uses AI_INTENT_REGEXES (agency/automation buyer signals)
     """
-    # SHARER title prefix patterns — applied against the TITLE ONLY (fast string check)
     SHARER_PREFIXES = [
         "i built", "i made", "i ran ", "i created", "i wrote", "i launched",
         "i released", "i published", "how i ", "here's what i ", "here's how i",
@@ -327,21 +322,21 @@ def stage1_regex_fuzzy_filter(entries: list[dict]) -> list[dict]:
         "show hn:", "show reddit:", "i open sourced",
     ]
 
+    patterns = AI_INTENT_REGEXES if track == "ai" else INTENT_REGEXES
+    label = "[AI TRACK]" if track == "ai" else "[ECOM TRACK]"
+
     tagged = []
     sharer_dropped = 0
 
     for entry in entries:
         title_lower = entry.get("title", "").lower().strip()
 
-        # Pre-check: discard SHARERS based on title prefix before running regex
         if any(title_lower.startswith(prefix) for prefix in SHARER_PREFIXES):
             sharer_dropped += 1
             continue
 
         searchable = f"{entry['title']} {entry['body']}".lower()
-
-        # Check against Regex patterns
-        intent_hits = sum(1 for pattern in INTENT_REGEXES if re.search(pattern, searchable))
+        intent_hits = sum(1 for pattern in patterns if re.search(pattern, searchable))
 
         if intent_hits == 0:
             continue
@@ -349,22 +344,24 @@ def stage1_regex_fuzzy_filter(entries: list[dict]) -> list[dict]:
         commercial_hits = sum(1 for kw in COMMERCIAL_KEYWORDS if kw in searchable)
 
         entry["regex_intent_hits"] = intent_hits
-        entry["commercial_score"] = commercial_hits  # Base commercial score from keywords
-        entry["match_type"] = "stage1_regex"
+        entry["commercial_score"] = commercial_hits
+        entry["match_type"] = f"stage1_regex_{track}"
         entry["keyword_tier"] = "regex_pass"
+        entry["track"] = track
 
         tagged.append(entry)
 
     if sharer_dropped > 0:
-        print(f"  🚫 Sharer pre-check: dropped {sharer_dropped} teach/share posts before regex")
-    print(f"  🎯 Stage 1 Regex Filter: {len(tagged)} posts passed to Stage 2")
+        print(f"  🚫 {label} Sharer pre-check: dropped {sharer_dropped} posts")
+    print(f"  🎯 {label} Stage 1: {len(tagged)} posts passed to Stage 2")
     return tagged
 
 
-def stage2_groq_triage(entries: list[dict]) -> list[dict]:
+def stage2_groq_triage(entries: list[dict], track: str = "ecom") -> list[dict]:
     """
-    Stage 2: Strict B2B Triage using Groq LLM.
-    Scores posts based on commercial context and explicit business problems.
+    Stage 2: B2B Triage using Groq LLM.
+    track='ecom' → uses Shopify/merchant triage prompt
+    track='ai'   → uses Agency/Automation buyer triage prompt
     """
     api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
@@ -372,44 +369,46 @@ def stage2_groq_triage(entries: list[dict]) -> list[dict]:
         for e in entries:
             e["intent_score"] = e.get("regex_intent_hits", 0) * 20
         return entries
-        
+
+    label = "[AI TRACK]" if track == "ai" else "[ECOM TRACK]"
+    prompt = GROQ_TRIAGE_PROMPT_TEMPLATE_AI if track == "ai" else GROQ_TRIAGE_PROMPT_TEMPLATE
+
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
     }
-    
+
     scored_entries = []
-    
+
     for entry in entries:
         title = entry.get("title", "")
-        body = entry.get("body", "")[:800] # Cap to save tokens
-        
+        body = entry.get("body", "")[:800]
+
         user_prompt = f"POST TITLE: {title}\n\nPOST BODY: {body}\n\nScore this post."
-        
+
         payload = {
             "model": GROQ_MODEL,
             "messages": [
-                {"role": "system", "content": GROQ_TRIAGE_PROMPT_TEMPLATE},
+                {"role": "system", "content": prompt},
                 {"role": "user", "content": user_prompt}
             ],
             "temperature": 0.0
         }
-        
+
         try:
             resp = requests.post(GROQ_API_BASE, json=payload, headers=headers, timeout=15)
             if resp.status_code == 429:
-                print("  ⚠️ Groq rate limited during Stage 2. Returning current scored entries.")
+                print(f"  ⚠️ {label} Groq rate limited. Returning current scored entries.")
                 break
             resp.raise_for_status()
-            
+
             raw_text = resp.json()["choices"][0]["message"]["content"].strip()
             raw_text = re.sub(r"^```(?:json)?\s*", "", raw_text)
             raw_text = re.sub(r"\s*```$", "", raw_text).strip()
-            
+
             try:
                 data = json.loads(raw_text)
             except json.JSONDecodeError:
-                # Try finding json block
                 match = re.search(r"\{[^{}]*\}", raw_text, re.DOTALL)
                 if match:
                     try:
@@ -418,20 +417,20 @@ def stage2_groq_triage(entries: list[dict]) -> list[dict]:
                         data = {"intent_score": 0, "reason": "Parse failed"}
                 else:
                     data = {"intent_score": 0, "reason": "Parse failed"}
-                
+
             intent_score = data.get("intent_score", 0)
-            
+
             if intent_score > 0:
                 entry["intent_score"] = intent_score
                 entry["groq_reason"] = data.get("reason", "")
                 scored_entries.append(entry)
-                
-            time.sleep(1.0) # Prevent Groq TPM/RPM limit bursts
-            
+
+            time.sleep(1.0)
+
         except Exception as e:
-            print(f"  ❌ Groq Triage Error: {e}")
-            
-    print(f"  🧠 Stage 2 Groq Triage: {len(scored_entries)} posts qualified as B2B leads")
+            print(f"  ❌ {label} Groq Triage Error: {e}")
+
+    print(f"  🧠 {label} Stage 2 Groq Triage: {len(scored_entries)} posts qualified")
     return scored_entries
 
 
@@ -553,10 +552,12 @@ def deduplicate(entries: list[dict], processed_ids: set) -> list[dict]:
 # =============================================================================
 def scan_reddit() -> tuple[list[dict], set]:
     """
-    Full scan pipeline: fetch → filter freshness → deduplicate → tag → rank_and_select.
+    Two-Track scan pipeline:
+      Track A (ECOM): Shopify/E-commerce subreddits → merchant pain signals
+      Track B (AI):   AI/Automation subreddits → agency/buyer signals
 
     Returns:
-        - List of qualified post dicts (max MAX_POSTS_PER_RUN)
+        - Combined list of qualified post dicts (max MAX_POSTS_PER_RUN total)
         - Updated set of all processed post IDs (old + new)
     """
     print(f"\n{'='*60}")
@@ -567,34 +568,48 @@ def scan_reddit() -> tuple[list[dict], set]:
     processed_ids = load_processed_posts()
     print(f"  📦 Ledger: {len(processed_ids)} previously processed posts")
 
-    # Step 1: Fetch RSS feed
+    # Step 1: Fetch all RSS entries (both track subreddits together)
     raw_entries = fetch_rss_feed()
     if not raw_entries:
         print("  😴 No entries from RSS feed. Exiting scan.")
         return [], processed_ids
 
-    # Step 2: Filter by freshness
+    # Step 2: Freshness filter + dedup (shared across both tracks)
     fresh_entries = filter_by_freshness(raw_entries)
-
-    # Step 3: Deduplicate against ledger
     new_entries = deduplicate(fresh_entries, processed_ids)
     if not new_entries:
         print("  😴 All entries already processed. No new posts this run.")
         return [], processed_ids
 
-    # Step 4: Stage 1 Regex / Fuzzy Net
-    stage1_passed = stage1_regex_fuzzy_filter(new_entries)
-    if not stage1_passed:
-        print("  😴 No entries passed Stage 1 Regex Filter.")
-        return [], processed_ids
-        
-    # Step 5: Stage 2 Groq B2B Triage
-    stage2_passed = stage2_groq_triage(stage1_passed)
+    # Step 3: Split entries into Track A (ecom) and Track B (ai) buckets
+    ai_sub_lower = {s.lower() for s in AI_SUBREDDITS}
+    track_a = [e for e in new_entries if e.get("subreddit", "").lower() not in ai_sub_lower]
+    track_b = [e for e in new_entries if e.get("subreddit", "").lower() in ai_sub_lower]
 
-    # Step 6: Rank and select
-    qualified = rank_and_select(stage2_passed, max_posts=MAX_POSTS_PER_RUN)
+    print(f"\n  📊 Track split: {len(track_a)} ECOM posts | {len(track_b)} AI posts")
 
-    # Update ledger with new post IDs
+    qualified_all = []
+
+    # ── TRACK A: Ecom/Shopify Pipeline ──────────────────────────────────────
+    if track_a:
+        print(f"\n  🛒 [ECOM TRACK] Running {len(track_a)} posts through ecom pipeline...")
+        a1 = stage1_regex_fuzzy_filter(track_a, track="ecom")
+        if a1:
+            a2 = stage2_groq_triage(a1, track="ecom")
+            qualified_all.extend(a2)
+
+    # ── TRACK B: AI/Automation Pipeline ─────────────────────────────────────
+    if track_b:
+        print(f"\n  🤖 [AI TRACK] Running {len(track_b)} posts through AI/agency pipeline...")
+        b1 = stage1_regex_fuzzy_filter(track_b, track="ai")
+        if b1:
+            b2 = stage2_groq_triage(b1, track="ai")
+            qualified_all.extend(b2)
+
+    # Step 4: Rank and select combined results
+    qualified = rank_and_select(qualified_all, max_posts=MAX_POSTS_PER_RUN)
+
+    # Update ledger with ALL newly qualified post IDs
     new_ids = {e["post_id"] for e in qualified}
     updated_ids = processed_ids | new_ids
 

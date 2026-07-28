@@ -99,6 +99,46 @@ INTENT_REGEXES = [
     r"\bhow\s+(?:are\s+you|do\s+you|should\s+I|can\s+I)\s+(?:handle|deal\s+with|manage|set\s+up|fix|tackle|approach)\b(?:\s+\S+){0,6}\s+(?:abandoned\s+cart|checkout|orders?|returns?|refunds?|inventory|fulfil|support|customers?|retention)",
 ]
 
+# =============================================================================
+# TRACK B: AI/AUTOMATION INTENT REGEX PATTERNS
+# Targets: agencies, companies, and funded teams struggling with:
+# - API/webhook failures at scale
+# - Automation limits forcing manual work
+# - "Who can build this for us?" buying signals
+# =============================================================================
+AI_INTENT_REGEXES = [
+
+    # --- CLUSTER 1: INFRASTRUCTURE BREAKING AT SCALE ---
+    # "We're hitting Zapier task limits", "n8n is crashing under load"
+    r"\b(?:hitting|hit|reached?|maxed?\s+out)\b(?:\s+\S+){0,4}\s+(?:limit|cap|quota|max|ceiling)\b(?:\s+\S+){0,4}\s+(?:zapier|n8n|make|pipedream|airflow|webhook|api)",
+    r"\b(?:zapier|n8n|make\.com|pipedream)\b(?:\s+\S+){0,5}\s+(?:slow(?:ing\s+down)?|crash(?:ing|ed)?|failing|too\s+expensive|not\s+scalab|can't\s+handle|breaking)",
+
+    # --- CLUSTER 2: WEBHOOK / API INTEGRATION FAILURES ---
+    # "Webhook keeps timing out", "API payload not parsing correctly"
+    r"\b(?:webhook|api\s+call|http\s+request|endpoint)\b(?:\s+\S+){0,5}\s+(?:timeout(?:ing|ed)?|fail(?:ing|ed)?|not\s+(?:firing|triggering|working)|error|dropping|missing)",
+    r"\b(?:payload|json|response|data)\b(?:\s+\S+){0,4}\s+(?:not\s+pars(?:ing|ed)|malformed|corrupt(?:ed)?|wrong\s+format|not\s+mapping)",
+
+    # --- CLUSTER 3: "BUILD THIS FOR ME" BUYING SIGNAL ---
+    # "Is there a service that can do X", "looking to hire someone to build"
+    r"\b(?:looking\s+(?:to\s+hire|for\s+someone|for\s+a\s+dev)|need\s+(?:a\s+developer|someone\s+to\s+build|help\s+building)|want\s+to\s+outsource|can\s+someone\s+build)\b",
+    r"\b(?:is\s+there\s+(?:a\s+service|a\s+tool|an\s+agency|anyone)|does\s+anyone\s+offer|who\s+(?:builds?|offers?|provides?))\b(?:\s+\S+){0,5}\s+(?:automat|integrat|workflow|api|connect)",
+
+    # --- CLUSTER 4: MANUAL WORK KILLING TEAM PRODUCTIVITY ---
+    # "My team manually exports data every day", "We copy-paste between 3 tools"
+    r"\b(?:my\s+team|our\s+team|we\s+(?:manually|still|have\s+to))\b(?:\s+\S+){0,5}\s+(?:manual(?:ly)?|copy.paste|export|import|enter\s+data|update\s+spreadsheet)",
+    r"\b(?:wasting|waste|spending)\b(?:\s+\S+){0,3}\s+(?:hours?|days?|time)\b(?:\s+\S+){0,4}\s+(?:manual|copy|export|import|data\s+entry|reconcil|sync)",
+
+    # --- CLUSTER 5: SCALING AN AUTOMATION BUSINESS (AGENCY SIGNAL) ---
+    # "I'm building automations for clients", "my agency handles n8n for 20+ clients"
+    r"\b(?:building\s+automations?\s+for|creating\s+workflows?\s+for|managing\s+(?:n8n|zapier|make)\s+for)\b(?:\s+\S+){0,4}\s+(?:client|clients?|business(?:es)?|company|companies)",
+    r"\b(?:my\s+agency|our\s+agency|we\s+(?:offer|provide|sell)\s+automation)\b",
+
+    # --- CLUSTER 6: LLM / AI AGENT BREAKING IN PRODUCTION ---
+    # "LLM agent keeps hallucinating in our production pipeline"
+    r"\b(?:llm|gpt|claude|gemini|ai\s+agent|language\s+model)\b(?:\s+\S+){0,5}\s+(?:hallucin|fail(?:ing|ed)|unreliab|inconsist|produc(?:tion)?|client|breaking|wrong\s+output)",
+    r"\b(?:production|prod\s+env|live\s+system|real\s+users?)\b(?:\s+\S+){0,5}\s+(?:ai|llm|agent|automation|workflow)\b(?:\s+\S+){0,4}\s+(?:fail|break|error|crash|wrong|bad)",
+]
+
 
 
 # =============================================================================
@@ -274,6 +314,46 @@ SCORING CRITERIA — SEEKERS ONLY (0-100):
   SCORE 65 EXAMPLE: "How are you handling abandoned cart recovery for customers in MENA/Arab countries?"
 - 20-49: Early-stage store, tangentially related to e-commerce, OR a broad commercial question (e.g. "What's the best tool to sync orders?", "How do you handle scaling?"). Do NOT score active business strategy questions as 0.
 - 0: Sharer, hobbyist, student, fully irrelevant.
+
+Respond ONLY with a strictly formatted JSON object containing exactly two keys: "intent_score" (integer) and "reason" (string, max 10 words).
+No markdown, no preamble."""
+
+# =============================================================================
+# STAGE 2: GROQ B2B TRIAGE PROMPT — TRACK B (AI/AUTOMATION)
+# =============================================================================
+GROQ_TRIAGE_PROMPT_TEMPLATE_AI = """You are an elite B2B Lead Qualifier for Sahajta AI — a company that builds custom AI automation systems and MCP integrations for businesses. Our service is for companies and agencies that need complex, custom-built automation pipelines: think multi-step LLM workflows, API integrations between enterprise tools, and production-grade AI agents.
+
+Your job: read a Reddit post and score it 0-100 based on how likely this person is to PAY for a custom automation service.
+
+THE GOLDEN RULE — BUYER vs BUILDER:
+A BUYER is a business, agency, or funded team that has a real automation PROBLEM and needs someone else to solve it. → SCORE NORMALLY.
+A BUILDER is a solo developer or hobbyist who enjoys building for fun, learning, or personal projects. → SCORE 0.
+
+BUYER SIGNALS (strong indicators of willingness to pay):
+- Mentions a team, company, clients, or employees
+- Currently paying for tools (Zapier, Make, n8n) and hitting limits
+- Asks "is there a service/agency that does X?"
+- Explicitly says they want to outsource or hire
+- Running automation IN PRODUCTION for real users or clients
+- Manual work is costing them real business hours
+
+BUILDER SIGNALS (will NOT pay — score 0):
+- Solo developer tinkering on a home server or homelab
+- Student or hobbyist "just learning"
+- "I built X" or "I made X" (Sharer, not Seeker)
+- No mention of a company, team, or paying clients
+- Personal/hobby project with no business impact
+
+SCORING CRITERIA — BUYERS ONLY (0-100):
+- 90-100: (RARE) Business is losing money or clients RIGHT NOW because automation is broken or missing.
+  SCORE 95 EXAMPLE: "Our Zapier hit its task limit mid-month, orders are not syncing to our CRM and clients are angry"
+- 70-89: Clear business problem, actively looking for a solution or service.
+  SCORE 80 EXAMPLE: "My agency manages n8n for 15 clients, we keep hitting issues we can't resolve, looking for expert help"
+  SCORE 75 EXAMPLE: "Is there a service that builds custom AI pipelines? We need something Zapier can't do"
+- 40-69: Business context is clear but urgency is moderate.
+  SCORE 55 EXAMPLE: "Our team manually exports data from 3 tools every morning, looking to automate this"
+- 20-39: Tangentially business-related, early stage, or vague buying intent.
+- 0: Solo builder, hobbyist, student, sharer, or irrelevant.
 
 Respond ONLY with a strictly formatted JSON object containing exactly two keys: "intent_score" (integer) and "reason" (string, max 10 words).
 No markdown, no preamble."""

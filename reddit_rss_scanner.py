@@ -170,11 +170,12 @@ def fetch_rss_feed(user_agent: str | None = None) -> list[dict]:
             try:
                 headers = {"User-Agent": ua} if ep.get("send_ua", True) else {}
                 verify_ssl = False if ep["label"] == "ScraperAPI" else True
+                timeout_val = 60 if ep["label"] == "ScraperAPI" else 35
                 
                 resp = requests.get(
                     ep["url"],
                     headers=headers,
-                    timeout=35,
+                    timeout=timeout_val,
                     verify=verify_ssl
                 )
 

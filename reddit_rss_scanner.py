@@ -12,8 +12,11 @@ import json
 import os
 import re
 import time
+import urllib3
 from datetime import datetime, timezone, timedelta
 from html import unescape
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 import feedparser
 import requests
@@ -166,10 +169,13 @@ def fetch_rss_feed(user_agent: str | None = None) -> list[dict]:
 
             try:
                 headers = {"User-Agent": ua} if ep.get("send_ua", True) else {}
+                verify_ssl = False if ep["label"] == "ScraperAPI" else True
+                
                 resp = requests.get(
                     ep["url"],
                     headers=headers,
                     timeout=35,
+                    verify=verify_ssl
                 )
 
                 # 429 or 403 → silently fall to next endpoint

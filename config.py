@@ -126,7 +126,8 @@ HOBBYIST_EXCLUDED_PHRASES = [
 # ANTI-PATTERN FILTERING (Removes low-signal & hobbyist posts)
 # =============================================================================
 EXCLUDED_PHRASES = [
-    "just starting", "brand new", "how do i start", "what's the best",
+    "thinking of starting", "want to start a store", "brand new to ecommerce", 
+    "brand new to dropshipping", "how do i start a shopify store", "what's the best",
     "no experience", "completely new", "never done this before", 
     "is dropshipping dead", "start a store", "how to start", "want to start",
     

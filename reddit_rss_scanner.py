@@ -379,8 +379,20 @@ def stage2_groq_triage(entries: list[dict], track: str = "ecom") -> list[dict]:
             e["intent_score"] = e.get("regex_intent_hits", 0) * 20
         return entries
 
+    try:
+        with open("pranamya_guidelines.txt", "r", encoding="utf-8") as f:
+            guidelines = "\n\nCRITICAL EDGE-CASE GUIDELINES FROM FOUNDER:\n" + f.read()
+    except FileNotFoundError:
+        guidelines = ""
+
     label = "[AI TRACK]" if track == "ai" else "[ECOM TRACK]"
-    prompt = GROQ_TRIAGE_PROMPT_TEMPLATE_AI if track == "ai" else GROQ_TRIAGE_PROMPT_TEMPLATE
+    base_prompt = GROQ_TRIAGE_PROMPT_TEMPLATE_AI if track == "ai" else GROQ_TRIAGE_PROMPT_TEMPLATE
+    
+    # Inject guidelines if the prompt template supports it (only ECOM supports it currently)
+    try:
+        prompt = base_prompt.format(PRANAMYA_GUIDELINES=guidelines)
+    except KeyError:
+        prompt = base_prompt
 
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -429,7 +441,7 @@ def stage2_groq_triage(entries: list[dict], track: str = "ecom") -> list[dict]:
 
             intent_score = data.get("intent_score", 0)
 
-            if intent_score > 0:
+            if intent_score >= 0:  # Feedback Loop: Allow everything through!
                 entry["intent_score"] = intent_score
                 entry["groq_reason"] = data.get("reason", "")
                 scored_entries.append(entry)

@@ -97,6 +97,9 @@ INTENT_REGEXES = [
     # TRUE POSITIVE: "How are you handling abandoned cart recovery for customers in MENA countries?"
     # "How are you handling X" / "How do you manage X" for a specific live business operation
     r"\bhow\s+(?:are\s+you|do\s+you|should\s+I|can\s+I)\s+(?:handle|deal\s+with|manage|set\s+up|fix|tackle|approach)\b(?:\s+\S+){0,6}\s+(?:abandoned\s+cart|checkout|orders?|returns?|refunds?|inventory|fulfil|support|customers?|retention)",
+    
+    # --- CLUSTER 10: LOOSENED PAIN SIGNALS (For Feedback Loop Volume) ---
+    r"\b(?:not\s+getting\s+sales|need\s+help\s+scaling|zero\s+traffic|low\s+conversion|why\s+am\s+i\s+not\s+getting\s+sales|need\s+advice\s+on\s+my\s+store|no\s+sales)\b",
 ]
 
 # =============================================================================
@@ -303,20 +306,31 @@ SHARER EXAMPLES (score = 0 for all of these):
 OTHER DISQUALIFIERS (score = 0):
 - Hobbyist / student doing this for learning, fun, school project, or personal use
 - Wantrepreneur: "I want to start a store" but hasn't started yet
-- NOT E-COMMERCE: Physical brick-and-mortar stores, offline retail, finance dealers, or generic IT support. If the post is NOT about a digital e-commerce/Shopify business, score it 0 immediately.
 
-SCORING CRITERIA — SEEKERS ONLY (0-100):
-BE CYNICAL AND RUTHLESS. DO NOT HAND OUT HIGH SCORES LIGHTLY. Most posts are average (20-40).
-- 95-100: (EXTREMELY RARE) "Hair on fire" emergency. Business is actively bleeding money RIGHT NOW.
-- 75-94: (RARE) Clear, pressing operational bottleneck and they are actively looking for a technical fix.
-- 40-74: Active business asking a specific operational question (e.g., "How are you handling abandoned carts in MENA?").
-- 10-39: Broad, vague, or low-urgency questions (e.g., "What's the best tool for syncing orders?").
-- 0: Sharer, hobbyist, student, fully irrelevant.
+SCORING CRITERIA — THE ADDITIVE BUCKET SYSTEM (0-100):
+You must score the post by summing points from the following 3 buckets. 
+Do NOT use hard kill-switches unless they violate the Disqualifiers above. 
 
-HOLISTIC SCORING RULE: You MUST weigh MULTIPLE signals together. No single factor (not length, not tone, not one keyword) should ever be the sole reason for a high or low score. A short but urgent post from a business owner IS valuable. A long but vague hobbyist post is NOT.
+1. INDUSTRY FIT (Max 40 Points):
+- 40/40: Explicitly mentions Shopify, E-commerce, dropshipping, D2C, or online retail.
+- 20/40: General digital business, SaaS, or ambiguous online business.
+- 0/40: Physical brick-and-mortar stores, offline retail, finance dealers, generic IT support.
 
+2. PAIN & URGENCY (Max 40 Points):
+- 40/40: Critical operational failure, broken workflows, active loss of revenue/sales (e.g., "checkout is down", "losing customers").
+- 20/40: Inefficient manual processes, seeking automation tools, asking how to scale operations.
+- 0/40: No pain. Teaching others, sharing a project, or asking a generic theoretical question ("How do I get traffic?").
+
+3. BUYING POWER / SCALE (Max 20 Points):
+- 20/20: Mentions a team, high traffic, ad spend, employees, or agency clients.
+- 10/20: Active solo business with existing sales.
+- 0/20: Student, hobbyist, or "wantrepreneur" who hasn't started yet.
+
+INSTRUCTIONS: 
+Calculate the sum of the 3 buckets to get the final `intent_score` (0-100).
 Respond ONLY with a strictly formatted JSON object containing exactly two keys: "intent_score" (integer) and "reason" (string, max 10 words).
-No markdown, no preamble."""
+No markdown, no preamble.
+{PRANAMYA_GUIDELINES}"""
 
 # =============================================================================
 # STAGE 2: GROQ B2B TRIAGE PROMPT — TRACK B (AI/AUTOMATION)

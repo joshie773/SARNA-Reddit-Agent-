@@ -167,19 +167,39 @@ def send_lead_alert(post: dict, comment: str, dm: str) -> bool:
     msg["From"] = sender
     msg["To"] = EMAIL_RECIPIENT
     
-    body = (
-        f"🎯 NEW {track} REDDIT LEAD DETECTED 🎯\n\n"
-        f"Pipeline Track: {track}\n"
-        f"Score: {score}/100\n"
-        f"Subreddit: r/{sub}\n"
-        f"Title: {title}\n"
-        f"URL: {url}\n\n"
-        f"--- AI COMMENT DRAFT ---\n{comment}\n\n"
-        f"--- AI DM DRAFT ---\n{dm}\n\n"
-        f"Action Required: Click the URL above to review and post!"
-    )
+    import urllib.parse
+    encoded_title = urllib.parse.quote(title)
     
-    msg.set_content(body)
+    # Pre-filled Google Form Links for Autonomous Feedback
+    form_base = "https://docs.google.com/forms/d/e/1FAIpQLSfSU2-BodgTamTgmegi6lnLZs-N0612WJKIvLvJoCJjnRKi7g/viewform?usp=pp_url"
+    good_link = f"{form_base}&entry.1636857333={encoded_title}&entry.1036755291=GOOD"
+    bad_link = f"{form_base}&entry.1636857333={encoded_title}&entry.1036755291=BAD"
+    
+    msg.add_alternative(f"""\
+    <html>
+      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+        <h2 style="color: #2c3e50;">🎯 NEW {track} REDDIT LEAD DETECTED 🎯</h2>
+        <p><strong>Score:</strong> {score}/100<br>
+        <strong>Subreddit:</strong> r/{sub}<br>
+        <strong>Title:</strong> {title}<br>
+        <strong>URL:</strong> <a href="{url}">{url}</a></p>
+        
+        <h3 style="color: #2980b9; border-bottom: 1px solid #eee; padding-bottom: 5px;">--- AI COMMENT DRAFT ---</h3>
+        <p style="white-space: pre-wrap;">{comment}</p>
+        
+        <h3 style="color: #27ae60; border-bottom: 1px solid #eee; padding-bottom: 5px;">--- AI DM DRAFT ---</h3>
+        <p style="white-space: pre-wrap;">{dm}</p>
+        
+        <hr style="border: none; border-top: 1px solid #ccc; margin: 20px 0;">
+        <h3 style="color: #8e44ad;">🤖 AUTONOMOUS FEEDBACK LOOP</h3>
+        <p>Help the AI learn by grading this lead. This takes 5 seconds:</p>
+        <p>
+          <a href="{good_link}" style="background-color: #2ecc71; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; margin-right: 15px;">🟢 MARK AS GOOD LEAD</a>
+          <a href="{bad_link}" style="background-color: #e74c3c; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">🔴 MARK AS BAD LEAD</a>
+        </p>
+      </body>
+    </html>
+    """, subtype='html')
     
     try:
         print(f"    📧 Dispatching email alert to {EMAIL_RECIPIENT}...")

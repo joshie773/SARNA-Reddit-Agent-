@@ -305,15 +305,17 @@ OTHER DISQUALIFIERS (score = 0):
 - Wantrepreneur: "I want to start a store" but hasn't started yet
 
 SCORING CRITERIA — SEEKERS ONLY (0-100):
-- 95-100: (EXTREMELY RARE) "Hair on fire" emergency. Business is actively bleeding money or systems are completely down RIGHT NOW.
-- 80-94: (RARE) Clear, pressing bottleneck with strong intent to fix it.
-  SCORE 88 EXAMPLE: "Getting traffic and add-to-carts but zero checkouts, what am I missing?"
-  SCORE 82 EXAMPLE: "500+ visits a day to a page that doesn't exist on my Shopify store, anyone else?"
-- 50-79: (COMMON) Active business, asking for solutions, workflows, or specific automation strategy.
-  SCORE 72 EXAMPLE: "Handling ads for a client's Shopify store (~$35k/mo), want to add something more organic on the retention side"
-  SCORE 65 EXAMPLE: "How are you handling abandoned cart recovery for customers in MENA/Arab countries?"
-- 20-49: Early-stage store, tangentially related to e-commerce, OR a broad commercial question (e.g. "What's the best tool to sync orders?", "How do you handle scaling?"). Do NOT score active business strategy questions as 0.
+BE CYNICAL AND RUTHLESS. DO NOT HAND OUT HIGH SCORES LIGHTLY. Most posts are average (20-40).
+- 95-100: (EXTREMELY RARE) "Hair on fire" emergency. Business is actively bleeding money RIGHT NOW.
+- 75-94: (RARE) Clear, pressing operational bottleneck and they are actively looking for a technical fix.
+- 40-74: Active business asking a specific operational question (e.g., "How are you handling abandoned carts in MENA?").
+- 10-39: Broad, vague, or low-urgency questions (e.g., "What's the best tool for syncing orders?").
 - 0: Sharer, hobbyist, student, fully irrelevant.
+
+PENALTIES (Deduct 20-40 points immediately if):
+- The post is very short (under 2 sentences) and lacks detail.
+- The user is asking "how do I get traffic" (we don't do marketing/ads, we do operations/automation).
+- The user is asking for general advice on starting out.
 
 Respond ONLY with a strictly formatted JSON object containing exactly two keys: "intent_score" (integer) and "reason" (string, max 10 words).
 No markdown, no preamble."""
@@ -345,15 +347,16 @@ BUILDER SIGNALS (will NOT pay — score 0):
 - Personal/hobby project with no business impact
 
 SCORING CRITERIA — BUYERS ONLY (0-100):
-- 90-100: (RARE) Business is losing money or clients RIGHT NOW because automation is broken or missing.
-  SCORE 95 EXAMPLE: "Our Zapier hit its task limit mid-month, orders are not syncing to our CRM and clients are angry"
-- 70-89: Clear business problem, actively looking for a solution or service.
-  SCORE 80 EXAMPLE: "My agency manages n8n for 15 clients, we keep hitting issues we can't resolve, looking for expert help"
-  SCORE 75 EXAMPLE: "Is there a service that builds custom AI pipelines? We need something Zapier can't do"
-- 40-69: Business context is clear but urgency is moderate.
-  SCORE 55 EXAMPLE: "Our team manually exports data from 3 tools every morning, looking to automate this"
-- 20-39: Tangentially business-related, early stage, or vague buying intent.
+BE CYNICAL AND RUTHLESS. DO NOT HAND OUT HIGH SCORES LIGHTLY. Most posts are builders/hobbyists. 
+- 90-100: (RARE) Business is losing money/clients RIGHT NOW because automation is broken.
+- 60-89: Clear business problem, explicitly asking for a service, agency, or expert to hire.
+- 30-59: Business context is clear but they seem like they want to build it themselves (DIY mindset).
+- 10-29: Tangentially business-related, vague.
 - 0: Solo builder, hobbyist, student, sharer, or irrelevant.
+
+PENALTIES (Deduct 30 points immediately if):
+- They ask "how do I build this in python/n8n" (they are a DIY builder, not a buyer).
+- The post is very short and lacks context.
 
 Respond ONLY with a strictly formatted JSON object containing exactly two keys: "intent_score" (integer) and "reason" (string, max 10 words).
 No markdown, no preamble."""

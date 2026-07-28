@@ -90,16 +90,53 @@ def save_processed_posts(post_ids: set):
 
 
 # =============================================================================
-# RSS feed fetching
+# RSS feed fetching — Ultimate Fallback Chain
 # =============================================================================
-def fetch_rss_feed(user_agent: str | None = None) -> list[dict]:
+def _build_endpoint_urls(grouped_subs: str) -> list[dict]:
     """
-    Fetch and parse RSS feeds in batches with robust 429 Rate Limit protection,
-    dynamic User-Agents, request jitter, and automatic .json fallback.
+    Build the ordered fallback chain of endpoints for a subreddit batch.
+    Each entry is a dict with 'url' and 'format' ('json' or 'rss').
+    
+    Priority:
+      1. ScraperAPI proxy  (bypasses Cloudflare entirely)
+      2. Old Reddit JSON   (legacy infra, looser rate limits) + cache-bust
+      3. Standard RSS      (last resort) + cache-bust
     """
     import random
+
+    scraper_key = os.environ.get("SCRAPER_API_KEY", "")
+    cache_bust = int(time.time() * 1000) + random.randint(0, 9999)
+
+    reddit_json_url = f"https://www.reddit.com/r/{grouped_subs}/new.json?limit=100"
+    old_reddit_json_url = f"https://old.reddit.com/r/{grouped_subs}/new.json?limit=100&t={cache_bust}"
+    standard_rss_url = f"https://www.reddit.com/r/{grouped_subs}/new/.rss?limit=100&t={cache_bust}"
+
+    endpoints = []
+
+    # Primary: ScraperAPI (only if key is configured)
+    if scraper_key:
+        proxy_url = f"http://api.scraperapi.com?api_key={scraper_key}&url={reddit_json_url}"
+        endpoints.append({"url": proxy_url, "format": "json", "label": "ScraperAPI"})
+
+    # Fallback 1: Old Reddit + cache-bust
+    endpoints.append({"url": old_reddit_json_url, "format": "json", "label": "Old Reddit"})
+
+    # Fallback 2: Standard RSS + cache-bust
+    endpoints.append({"url": standard_rss_url, "format": "rss", "label": "Standard RSS"})
+
+    return endpoints
+
+
+def fetch_rss_feed(user_agent: str | None = None) -> list[dict]:
+    """
+    Fetch Reddit posts using the Ultimate Fallback Chain:
+      ScraperAPI → Old Reddit → Standard RSS
     
-    # Dynamic User-Agent with timestamp to avoid static-string blocks
+    Each batch of subreddits tries endpoints in priority order.
+    If one fails or returns a 429, it silently falls to the next.
+    """
+    import random
+
     ua = user_agent or os.environ.get(
         "REDDIT_USER_AGENT",
         f"python:sarna_monitor_v4:v4.0.{int(time.time())} (by /u/sarna_bot)",
@@ -109,100 +146,105 @@ def fetch_rss_feed(user_agent: str | None = None) -> list[dict]:
 
     entries = []
     target_subs_lower = {s.lower(): s for s in TARGET_SUBREDDITS}
-    
-    # Break into batches of 5 subreddits to reduce requests
+
+    # Break into batches of 5 subreddits
     batch_size = 5
     batches = [TARGET_SUBREDDITS[i:i + batch_size] for i in range(0, len(TARGET_SUBREDDITS), batch_size)]
-    
-    for batch in batches:
+
+    for batch_idx, batch in enumerate(batches):
         grouped_subs = "+".join(batch)
-        urls = [
-            f"https://www.reddit.com/r/{grouped_subs}/new/.rss?limit=100",
-            f"https://www.reddit.com/r/{grouped_subs}/new.json?limit=100" # Fallback JSON endpoint
-        ]
-        
-        success = False
-        for endpoint_url in urls:
-            if success:
+        endpoints = _build_endpoint_urls(grouped_subs)
+
+        batch_success = False
+        for ep in endpoints:
+            if batch_success:
                 break
-                
-            for attempt in range(2):
-                try:
-                    resp = requests.get(
-                        endpoint_url,
-                        headers={"User-Agent": ua},
-                        timeout=20,
-                    )
-                    
-                    if resp.status_code == 429:
-                        retry_after = int(resp.headers.get("Retry-After", 15 * (attempt + 1)))
-                        jitter = random.uniform(2.0, 7.0)
-                        sleep_time = retry_after + jitter
-                        print(f"  ⚠️ Rate limited (429) on endpoint... Sleeping for {sleep_time:.1f}s...")
-                        time.sleep(sleep_time)
+
+            try:
+                resp = requests.get(
+                    ep["url"],
+                    headers={"User-Agent": ua},
+                    timeout=30,
+                )
+
+                # 429 → silently fall to next endpoint
+                if resp.status_code == 429:
+                    print(f"  ⚠️ 429 on {ep['label']}... falling back")
+                    time.sleep(random.uniform(2.0, 5.0))
+                    continue
+
+                # Any other HTTP error → fall to next endpoint
+                if resp.status_code >= 400:
+                    print(f"  ⚠️ {resp.status_code} on {ep['label']}... falling back")
+                    continue
+
+                resp.raise_for_status()
+
+                # ── Parse JSON format ──
+                if ep["format"] == "json":
+                    data = resp.json()
+                    children = data.get("data", {}).get("children", [])
+                    for child in children:
+                        post_data = child.get("data", {})
+                        post_id = post_data.get("id")
+                        if not post_id:
+                            continue
+
+                        raw_sub = post_data.get("subreddit", "unknown")
+                        subreddit = target_subs_lower.get(raw_sub.lower(), raw_sub)
+
+                        entries.append({
+                            "post_id": post_id,
+                            "title": post_data.get("title", "").strip(),
+                            "body": strip_html(post_data.get("selftext", "")),
+                            "url": f"https://reddit.com{post_data.get('permalink', '')}",
+                            "subreddit": subreddit,
+                            "published_utc": datetime.fromtimestamp(post_data.get("created_utc", 0), tz=timezone.utc),
+                            "author": post_data.get("author", "unknown"),
+                        })
+
+                # ── Parse RSS format ──
+                else:
+                    feed = feedparser.parse(resp.text)
+                    if feed.bozo and not feed.entries:
                         continue
-                        
-                    resp.raise_for_status()
-                    
-                    # Parse based on endpoint type
-                    if ".json" in endpoint_url:
-                        data = resp.json()
-                        children = data.get("data", {}).get("children", [])
-                        for child in children:
-                            post_data = child.get("data", {})
-                            post_id = post_data.get("id")
-                            if not post_id:
-                                continue
-                            
-                            raw_sub = post_data.get("subreddit", "unknown")
-                            subreddit = target_subs_lower.get(raw_sub.lower(), raw_sub)
-                            
-                            entries.append({
-                                "post_id": post_id,
-                                "title": post_data.get("title", "").strip(),
-                                "body": strip_html(post_data.get("selftext", "")),
-                                "url": f"https://reddit.com{post_data.get('permalink', '')}",
-                                "subreddit": subreddit,
-                                "published_utc": datetime.fromtimestamp(post_data.get("created_utc", 0), tz=timezone.utc),
-                                "author": post_data.get("author", "unknown"),
-                            })
-                    else:
-                        feed = feedparser.parse(resp.text)
-                        
-                        if feed.bozo and not feed.entries:
-                            break
-                            
-                        for entry in feed.entries:
-                            post_id = _extract_post_id(entry.get("link", "") or entry.get("id", ""))
-                            if not post_id:
-                                continue
 
-                            raw_sub = _extract_subreddit(entry)
-                            subreddit = target_subs_lower.get(raw_sub.lower(), raw_sub)
+                    for entry in feed.entries:
+                        post_id = _extract_post_id(entry.get("link", "") or entry.get("id", ""))
+                        if not post_id:
+                            continue
 
-                            raw_body = entry.get("summary", "") or ""
-                            body = strip_html(raw_body)
-                            published_utc = _parse_published_time(entry)
+                        raw_sub = _extract_subreddit(entry)
+                        subreddit = target_subs_lower.get(raw_sub.lower(), raw_sub)
+                        raw_body = entry.get("summary", "") or ""
+                        body = strip_html(raw_body)
+                        published_utc = _parse_published_time(entry)
 
-                            entries.append({
-                                "post_id": post_id,
-                                "title": entry.get("title", "").strip(),
-                                "body": body,
-                                "url": entry.get("link", ""),
-                                "subreddit": subreddit,
-                                "published_utc": published_utc,
-                                "author": _extract_author(entry),
-                            })
-                            
-                    success = True
-                    break
-                    
-                except requests.RequestException as e:
-                    print(f"  ❌ Error fetching {endpoint_url}: {e}")
-                    break
-            
-        # Generous base sleep to respect Reddit's unauthenticated limits (with jitter)
-        time.sleep(10.0 + random.uniform(1.1, 5.5))
+                        entries.append({
+                            "post_id": post_id,
+                            "title": entry.get("title", "").strip(),
+                            "body": body,
+                            "url": entry.get("link", ""),
+                            "subreddit": subreddit,
+                            "published_utc": published_utc,
+                            "author": _extract_author(entry),
+                        })
+
+                batch_success = True
+                print(f"  ✅ Batch {batch_idx + 1}/{len(batches)} fetched via {ep['label']}")
+
+            except requests.RequestException as e:
+                print(f"  ❌ {ep['label']} error: {e}... falling back")
+                continue
+
+        if not batch_success:
+            print(f"  🚨 All endpoints failed for batch: {grouped_subs}")
+
+        # Polite inter-batch delay (Mercator principle)
+        if batch_idx < len(batches) - 1:
+            sleep_time = random.uniform(3.0, 6.0)
+            print(f"  😴 Polite sleep {sleep_time:.1f}s before next batch...")
+            time.sleep(sleep_time)
 
     print(f"  📥 Parsed {len(entries)} total entries across all endpoints")
     print(f"  ✅ Scanned all {len(TARGET_SUBREDDITS)} subreddits in this run")

@@ -98,34 +98,36 @@ def save_processed_posts(post_ids: set):
 def _build_endpoint_urls(grouped_subs: str) -> list[dict]:
     """
     Build the ordered fallback chain of endpoints for a subreddit batch.
-    Each entry is a dict with 'url' and 'format' ('json' or 'rss').
+    Each entry is a dict with 'url', 'format' ('json' or 'rss'), and header flags.
     
     Priority:
       1. ScraperAPI proxy  (bypasses Cloudflare entirely)
-      2. Old Reddit JSON   (legacy infra, looser rate limits) + cache-bust
-      3. Standard RSS      (last resort) + cache-bust
+      2. Standard RSS      (public XML feed) + cache-bust
+      3. Old Reddit JSON   (legacy infra) + cache-bust
     """
     import random
+    import urllib.parse
 
     scraper_key = os.environ.get("SCRAPER_API_KEY", "")
     cache_bust = int(time.time() * 1000) + random.randint(0, 9999)
 
     reddit_json_url = f"https://www.reddit.com/r/{grouped_subs}/new.json?limit=100"
-    old_reddit_json_url = f"https://old.reddit.com/r/{grouped_subs}/new.json?limit=100&t={cache_bust}"
     standard_rss_url = f"https://www.reddit.com/r/{grouped_subs}/new/.rss?limit=100&t={cache_bust}"
+    old_reddit_json_url = f"https://old.reddit.com/r/{grouped_subs}/new.json?limit=100&t={cache_bust}"
 
     endpoints = []
 
     # Primary: ScraperAPI (only if key is configured)
     if scraper_key:
-        proxy_url = f"http://api.scraperapi.com?api_key={scraper_key}&url={reddit_json_url}"
-        endpoints.append({"url": proxy_url, "format": "json", "label": "ScraperAPI"})
+        encoded_url = urllib.parse.quote(reddit_json_url, safe="")
+        proxy_url = f"https://api.scraperapi.com?api_key={scraper_key}&url={encoded_url}"
+        endpoints.append({"url": proxy_url, "format": "json", "label": "ScraperAPI", "send_ua": False})
 
-    # Fallback 1: Old Reddit + cache-bust
-    endpoints.append({"url": old_reddit_json_url, "format": "json", "label": "Old Reddit"})
+    # Fallback 1: Standard RSS + cache-bust
+    endpoints.append({"url": standard_rss_url, "format": "rss", "label": "Standard RSS", "send_ua": True})
 
-    # Fallback 2: Standard RSS + cache-bust
-    endpoints.append({"url": standard_rss_url, "format": "rss", "label": "Standard RSS"})
+    # Fallback 2: Old Reddit + cache-bust
+    endpoints.append({"url": old_reddit_json_url, "format": "json", "label": "Old Reddit", "send_ua": True})
 
     return endpoints
 
@@ -133,17 +135,16 @@ def _build_endpoint_urls(grouped_subs: str) -> list[dict]:
 def fetch_rss_feed(user_agent: str | None = None) -> list[dict]:
     """
     Fetch Reddit posts using the Ultimate Fallback Chain:
-      ScraperAPI → Old Reddit → Standard RSS
+      ScraperAPI → Standard RSS → Old Reddit
     
     Each batch of subreddits tries endpoints in priority order.
-    If one fails or returns a 429, it silently falls to the next.
+    If one fails or returns a 429/403, it silently falls to the next.
     """
     import random
 
-    ua = user_agent or os.environ.get(
-        "REDDIT_USER_AGENT",
-        f"python:sarna_monitor_v4:v4.0.{int(time.time())} (by /u/sarna_bot)",
-    )
+    # Realistic browser UA for non-proxy fallbacks (avoids Cloudflare 403s on standard requests)
+    browser_ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0"
+    ua = user_agent or os.environ.get("REDDIT_USER_AGENT", browser_ua)
 
     print(f"  📡 Fetching RSS from {len(TARGET_SUBREDDITS)} subreddits in batches...")
 
@@ -164,16 +165,17 @@ def fetch_rss_feed(user_agent: str | None = None) -> list[dict]:
                 break
 
             try:
+                headers = {"User-Agent": ua} if ep.get("send_ua", True) else {}
                 resp = requests.get(
                     ep["url"],
-                    headers={"User-Agent": ua},
-                    timeout=30,
+                    headers=headers,
+                    timeout=35,
                 )
 
-                # 429 → silently fall to next endpoint
-                if resp.status_code == 429:
-                    print(f"  ⚠️ 429 on {ep['label']}... falling back")
-                    time.sleep(random.uniform(2.0, 5.0))
+                # 429 or 403 → silently fall to next endpoint
+                if resp.status_code in (429, 403):
+                    print(f"  ⚠️ {resp.status_code} on {ep['label']}... falling back")
+                    time.sleep(random.uniform(1.5, 3.5))
                     continue
 
                 # Any other HTTP error → fall to next endpoint

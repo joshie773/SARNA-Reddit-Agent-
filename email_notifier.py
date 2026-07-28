@@ -160,14 +160,16 @@ def send_lead_alert(post: dict, comment: str, dm: str) -> bool:
     title = post.get('title', 'Unknown')
     sub = post.get('subreddit', 'unknown')
     url = post.get('url', '')
+    track = post.get('track', 'ecom').upper()
     
     msg = EmailMessage()
-    msg["Subject"] = f"🎯 NEW REDDIT LEAD: [{score}/100] r/{sub} - {title[:50]}"
+    msg["Subject"] = f"🎯 [{track}] NEW REDDIT LEAD: [{score}/100] r/{sub} - {title[:50]}"
     msg["From"] = sender
     msg["To"] = EMAIL_RECIPIENT
     
     body = (
-        f"🎯 NEW REDDIT LEAD DETECTED 🎯\n\n"
+        f"🎯 NEW {track} REDDIT LEAD DETECTED 🎯\n\n"
+        f"Pipeline Track: {track}\n"
         f"Score: {score}/100\n"
         f"Subreddit: r/{sub}\n"
         f"Title: {title}\n"

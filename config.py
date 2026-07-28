@@ -312,10 +312,7 @@ BE CYNICAL AND RUTHLESS. DO NOT HAND OUT HIGH SCORES LIGHTLY. Most posts are ave
 - 10-39: Broad, vague, or low-urgency questions (e.g., "What's the best tool for syncing orders?").
 - 0: Sharer, hobbyist, student, fully irrelevant.
 
-PENALTIES (Deduct 20-40 points immediately if):
-- The post is very short (under 2 sentences) and lacks detail.
-- The user is asking "how do I get traffic" (we don't do marketing/ads, we do operations/automation).
-- The user is asking for general advice on starting out.
+HOLISTIC SCORING RULE: You MUST weigh MULTIPLE signals together. No single factor (not length, not tone, not one keyword) should ever be the sole reason for a high or low score. A short but urgent post from a business owner IS valuable. A long but vague hobbyist post is NOT.
 
 Respond ONLY with a strictly formatted JSON object containing exactly two keys: "intent_score" (integer) and "reason" (string, max 10 words).
 No markdown, no preamble."""
@@ -354,9 +351,7 @@ BE CYNICAL AND RUTHLESS. DO NOT HAND OUT HIGH SCORES LIGHTLY. Most posts are bui
 - 10-29: Tangentially business-related, vague.
 - 0: Solo builder, hobbyist, student, sharer, or irrelevant.
 
-PENALTIES (Deduct 30 points immediately if):
-- They ask "how do I build this in python/n8n" (they are a DIY builder, not a buyer).
-- The post is very short and lacks context.
+HOLISTIC SCORING RULE: You MUST weigh MULTIPLE signals together. No single factor (not length, not tone, not one keyword) should ever be the sole reason for a high or low score. A short but urgent post from a company with a broken pipeline IS valuable. A long but clearly hobbyist post is NOT.
 
 Respond ONLY with a strictly formatted JSON object containing exactly two keys: "intent_score" (integer) and "reason" (string, max 10 words).
 No markdown, no preamble."""

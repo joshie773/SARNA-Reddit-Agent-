@@ -123,7 +123,7 @@ def _build_endpoint_urls(grouped_subs: str) -> list[dict]:
     # Primary: ScraperAPI (only if key is configured)
     if scraper_key:
         encoded_url = urllib.parse.quote(reddit_json_url, safe="")
-        proxy_url = f"https://api.scraperapi.com?api_key={scraper_key}&url={encoded_url}"
+        proxy_url = f"https://api.scraperapi.com?api_key={scraper_key}&url={encoded_url}&premium=true"
         endpoints.append({"url": proxy_url, "format": "json", "label": "ScraperAPI", "send_ua": False})
 
     # Fallback 1: Standard RSS + cache-bust

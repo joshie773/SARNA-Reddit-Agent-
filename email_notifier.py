@@ -218,6 +218,85 @@ def send_lead_alert(post: dict, comment: str, dm: str) -> bool:
         print(f"    ❌ Failed to send lead alert email: {e}")
         return False
 
+def send_batch_lead_alert(batch_data: list) -> bool:
+    """Send an instant email alert containing multiple leads."""
+    sender = os.environ.get("GMAIL_ADDRESS")
+    app_password = os.environ.get("GMAIL_APP_PASSWORD")
+
+    if not sender or not app_password:
+        print("    ⚠️ GMAIL_ADDRESS or GMAIL_APP_PASSWORD not set — skipping batch email dispatch")
+        return False
+        
+    if not batch_data:
+        return True
+        
+    msg = EmailMessage()
+    msg["Subject"] = f"🎯 {len(batch_data)} NEW REDDIT LEADS FOUND!"
+    msg["From"] = sender
+    msg["To"] = EMAIL_RECIPIENT
+    
+    import urllib.parse
+    form_base = "https://docs.google.com/forms/d/e/1FAIpQLSfSU2-BodgTamTgmegi6lnLZs-N0612WJKIvLvJoCJjnRKi7g/viewform?usp=pp_url"
+    
+    html_content = f"""\
+    <html>
+      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+        <h2 style="color: #2c3e50;">🎯 {len(batch_data)} NEW REDDIT LEADS DETECTED 🎯</h2>
+        <p>The agent found multiple leads in this run. Review them below:</p>
+    """
+    
+    for item in batch_data:
+        post = item["post"]
+        comment = item["comment"]
+        dm = item["dm"]
+        
+        score = post.get('total_score', 0)
+        title = post.get('title', 'Unknown')
+        sub = post.get('subreddit', 'unknown')
+        url = post.get('url', '')
+        track = post.get('track', 'ecom').upper()
+        
+        encoded_title = urllib.parse.quote(title)
+        good_link = f"{form_base}&entry.1636857333={encoded_title}&entry.1036755291=GOOD"
+        bad_link = f"{form_base}&entry.1636857333={encoded_title}&entry.1036755291=BAD"
+        
+        html_content += f"""\
+        <div style="border: 1px solid #ccc; padding: 15px; margin-bottom: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <h3 style="color: #2980b9; margin-top: 0; border-bottom: 2px solid #3498db; padding-bottom: 5px;">[{track}] r/{sub} - Score: {score}/100</h3>
+            <p><strong>Title:</strong> {title}<br>
+            <strong>URL:</strong> <a href="{url}">{url}</a></p>
+            
+            <h4 style="color: #27ae60; margin-bottom: 5px;">💬 AI COMMENT DRAFT</h4>
+            <div style="background-color: #f8fcf9; border-left: 4px solid #2ecc71; padding: 10px; white-space: pre-wrap; font-size: 0.9em;">{comment}</div>
+            
+            <h4 style="color: #8e44ad; margin-bottom: 5px;">✉️ AI DM DRAFT</h4>
+            <div style="background-color: #fbf8fc; border-left: 4px solid #9b59b6; padding: 10px; white-space: pre-wrap; font-size: 0.9em;">{dm}</div>
+            
+            <div style="margin-top: 20px; text-align: center; background: #ecf0f1; padding: 15px; border-radius: 5px;">
+                <strong style="display: block; margin-bottom: 10px;">🤖 AUTONOMOUS FEEDBACK: GRADE THIS LEAD</strong>
+                <a href="{good_link}" style="display: inline-block; background-color: #2ecc71; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; margin-right: 15px;">🟢 GOOD LEAD</a>
+                <a href="{bad_link}" style="display: inline-block; background-color: #e74c3c; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">🔴 BAD LEAD</a>
+            </div>
+        </div>
+        """
+        
+    html_content += """
+      </body>
+    </html>
+    """
+    
+    msg.add_alternative(html_content, subtype='html')
+    
+    try:
+        print(f"    📧 Dispatching batch email alert to {EMAIL_RECIPIENT}...")
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+            smtp.login(sender, app_password)
+            smtp.send_message(msg)
+        print(f"    ✅ Batch email sent successfully for {len(batch_data)} leads!")
+        return True
+    except Exception as e:
+        print(f"    ❌ Failed to send batch lead alert email: {e}")
+        return False
 
 # =============================================================================
 # Main notification pipeline

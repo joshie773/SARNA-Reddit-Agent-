@@ -35,7 +35,7 @@ except ImportError:
 from config import GROQ_COMMENT_SLEEP_BETWEEN_CALLS
 from reddit_rss_scanner import scan_reddit, save_processed_posts
 from comment_generator import generate_comment_and_dm
-from email_notifier import run_notification, send_lead_alert
+from email_notifier import run_notification, send_batch_lead_alert
 
 
 # =============================================================================
@@ -74,6 +74,7 @@ def run_ingestion(test_mode: bool = False):
     # Step 2: Generate comment + DM & Dispatch Email for EVERY post
     # =========================================================================
     print(f"\n💬 Step 2: Generating comments & dispatching emails for {len(posts)} posts...")
+    batch_data = []
     success_count = 0
 
     for i, post in enumerate(posts, 1):
@@ -88,9 +89,13 @@ def run_ingestion(test_mode: bool = False):
 
             print(f"    ✅ Comment: {len(comment.split())} words | DM: {len(dm.split())} words")
             
-            # Send Email Alert for EVERY extracted lead (no score threshold)
+            # Store data for batch email
             if not test_mode:
-                send_lead_alert(post, comment, dm)
+                batch_data.append({
+                    "post": post,
+                    "comment": comment,
+                    "dm": dm
+                })
             else:
                 print(f"    🧪 TEST MODE — Email alert generation verified for r/{post['subreddit']}")
 
@@ -105,6 +110,11 @@ def run_ingestion(test_mode: bool = False):
         if i < len(posts):
             print(f"    ⏳ Rate limit sleep ({GROQ_COMMENT_SLEEP_BETWEEN_CALLS}s)...")
             time.sleep(GROQ_COMMENT_SLEEP_BETWEEN_CALLS)
+
+    # Send batch email alert if there are leads
+    if batch_data:
+        print(f"\n📧 Sending batch email for {len(batch_data)} leads...")
+        send_batch_lead_alert(batch_data)
 
     # =========================================================================
     # Step 3: Save processed posts ledger

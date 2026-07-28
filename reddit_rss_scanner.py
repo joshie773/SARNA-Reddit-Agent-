@@ -618,8 +618,8 @@ def scan_reddit() -> tuple[list[dict], set]:
     # Step 4: Rank and select combined results
     qualified = rank_and_select(qualified_all, max_posts=MAX_POSTS_PER_RUN)
 
-    # Update ledger with ALL newly qualified post IDs
-    new_ids = {e["post_id"] for e in qualified}
+    # Update ledger with ALL processed post IDs (so we don't re-process rejected posts)
+    new_ids = {e["post_id"] for e in new_entries}
     updated_ids = processed_ids | new_ids
 
     print(f"\n✅ Scan complete: {len(qualified)} qualified posts ready for processing")

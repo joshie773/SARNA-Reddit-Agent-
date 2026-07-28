@@ -16,7 +16,7 @@ from config import GROQ_MODEL, GROQ_API_BASE
 
 def get_feedback_sheet_data():
     creds_json_str = os.environ.get("GOOGLE_SHEETS_CREDENTIALS")
-    sheet_id = os.environ.get("FEEDBACK_SHEET_ID")
+    sheet_id = os.environ.get("FEEDBACK_SHEET_ID", "155r3ek1NR1p8uvLmrF8luuF2s2nbyz0LWg57_pP0lxw")
     
     if not creds_json_str or not sheet_id:
         print("❌ Missing GOOGLE_SHEETS_CREDENTIALS or FEEDBACK_SHEET_ID")
